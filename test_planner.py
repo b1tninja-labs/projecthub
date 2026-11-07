@@ -25,7 +25,8 @@ def workspace(tmp_path, monkeypatch):
     (project / "tests").mkdir(parents=True)
     (project / "tests" / "test_roadmap_rows.py").write_text(
         "def test_matrix_has_rows():\n    assert True\n\n"
-        "def test_every_row_names_a_real_callable():\n    assert True\n",
+        "def test_every_row_names_a_real_callable():\n    assert True\n\n"
+        "def test_load_anchor_helper():\n    assert True\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(p, "ROOT", tmp_path)
@@ -84,6 +85,40 @@ def test_propose_status_refuses_and_leaves_the_file_alone(workspace):
     outcome = p.propose_status("pkix", "a.b", "[ok]", True)
     assert outcome.startswith("REFUSED:")
     assert path.read_text(encoding="utf-8") == PHANTOM_ROW
+
+
+def test_a_helper_with_a_longer_name_is_not_evidence(workspace):
+    row = "| `a.b()` | s | `[ ]` | `tests/test_roadmap_rows.py::test_load_anchor` |\n"
+    _, refusal = p.rewrite_row(row, "pkix", "a.b", "[ok]")
+    assert "defines no test_load_anchor" in refusal, (
+        "def test_load_anchor_helper must not satisfy ::test_load_anchor"
+    )
+
+
+def test_a_planned_test_is_not_evidence(workspace):
+    row = "| `a.b()` | s | `[ ]` | `tests/test_roadmap_rows.py::test_matrix_has_rows` (to be written) |\n"
+    _, refusal = p.rewrite_row(row, "pkix", "a.b", "[ok]")
+    assert "(to be written)" in refusal
+
+
+def test_only_the_status_cell_changes(workspace):
+    text = (
+        "| Id | Spec | Status | Where | Evidence |\n|---|---|---|---|---|\n"
+        "| `cl.ambient-trust`  |  Model I1,  L1 \\| L2 | [ ] | `anchors.py`   | `test_matrix_has_rows` |\n"
+        "| `cl.other` | Model I2 | [ ] | `x.py` | - |\n"
+    )
+    updated, refusal = p.rewrite_row(text, "pkix", "cl.ambient-trust", "[x]")
+    assert refusal == "", refusal
+    assert updated == text.replace("| [ ] | `anchors.py`", "| [x] | `anchors.py`", 1)
+
+
+def test_the_status_column_is_found_by_header(workspace):
+    text = (
+        "| Id | Status | Spec | Where |\n|---|---|---|---|\n| `x.y` | [ ] | [ ] | w |\n"
+    )
+    updated, refusal = p.rewrite_row(text, "pkix", "x.y", "[part]")
+    assert refusal == "", refusal
+    assert updated.endswith("| `x.y` | [part] | [ ] | w |\n")
 
 
 def test_mcp_surface_exposes_exactly_five_tools():

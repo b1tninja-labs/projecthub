@@ -187,3 +187,26 @@ def test_update_issue_edits_only_when_something_differs(tree, monkeypatch):
         "demo-kit", "me/demo-kit", row, rows, text, tree, ladder, stale, True
     )
     assert len(ran) == 1 and "--milestone" in ran[0] and "--title" in ran[0]
+
+
+def test_errata_lines_match_any_rfc_on_the_line_not_only_the_first():
+    text = ROADMAP.replace(
+        "- RFC 9999 carries 1 verified erratum.",
+        "- RFC 9999 carries 1 verified erratum.\n- RFC 6818 and RFC 5280 share one reported erratum.",
+    )
+    lines = rowdoc.errata_lines(text, "RFC 6818")
+    assert lines == ["RFC 6818 and RFC 5280 share one reported erratum."]
+    assert "RFC 6818 and RFC 5280 share one reported erratum." in rowdoc.errata_lines(
+        text, "RFC 5280"
+    )
+
+
+def test_the_evidence_check_is_exact_and_ignores_planned_tests(tree):
+    ok, why = rowdoc.test_evidence(tree, "demo-kit", "`tests/test_a.py::test_loa`")
+    assert not ok and "defines no test_loa" in why, (
+        "a prefix of a real name is not that name"
+    )
+    ok, why = rowdoc.test_evidence(
+        tree, "demo-kit", "`tests/test_a.py::test_load` (to be written)"
+    )
+    assert not ok and "(to be written)" in why

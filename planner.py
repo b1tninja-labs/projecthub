@@ -24,8 +24,9 @@ import pathlib
 import subprocess
 import sys
 
-import rowdoc
-from sync_roadmap import MARKER, PROJECTS, STATUSES, gh, rows_of
+import roadmap
+from roadmap import rows_of
+from sync_roadmap import MARKER, PROJECTS, STATUSES, gh
 
 # Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
 # this machine's layout into every read and write; the planner's own tests discovered that by passing
@@ -49,13 +50,17 @@ def _gh_json(argv: list[str]) -> object:
 
 
 def roadmap_path(project: str) -> pathlib.Path:
-    return ROOT / project / "ROADMAP.md"
+    """The project's matrix (ROADMAP.md, PLAN.md or docs/roadmap.md, per roadmap.matrix_path)."""
+    return (
+        roadmap.matrix_path(ROOT, project)
+        or roadmap.project_dir(ROOT, project) / "ROADMAP.md"
+    )
 
 
 def portfolio_status(with_issues: bool = True) -> list[dict[str, object]]:
     """Every project with a matrix: rows by status, and the derived issue count when reachable."""
     out: list[dict[str, object]] = []
-    for name in PROJECTS:
+    for name in dict.fromkeys([*PROJECTS, *roadmap.HAND_OWNED]):
         path = roadmap_path(name)
         if not path.is_file():
             continue
@@ -133,7 +138,7 @@ def context_for(project: str, needle: str, window: int = 14) -> str:
     return f"no mention of {needle!r} in {project}/ROADMAP.md"
 
 
-def test_evidence(project: str, where: str) -> tuple[bool, str]:
+def test_evidence(project: str, where: str, evidence: str = "") -> tuple[bool, str]:
     """Does the row's named test actually exist and define the named symbol?
 
     One implementation, shared with the issue text (rowdoc.py): two copies of this check would drift, and
@@ -141,37 +146,43 @@ def test_evidence(project: str, where: str) -> tuple[bool, str]:
     a row flips only when the test would fail if the behaviour regressed, and only CI running that test
     can show that.
     """
-    return rowdoc.test_evidence(ROOT, project, where)
+    return roadmap.evidence(ROOT, project, where, evidence)
 
 
 def rewrite_row(text: str, project: str, name: str, new_status: str) -> tuple[str, str]:
-    """Return (new text, refusal). Empty refusal means the row was changed."""
+    """Return (new text, refusal). Empty refusal means the row was changed.
+
+    Only the Status cell's token is replaced. Rebuilding the line from its stripped cells, as an earlier
+    version did, re-spaced every cell and split an escaped pipe into two cells, so a one-word status
+    change arrived as a whole-line diff. The row is found, and the done guard reads its Where and
+    Evidence cells, through roadmap.py's header-aware grammar.
+    """
     if new_status not in STATUSES:
         return (
             text,
             f"{new_status!r} is not a status this portfolio recognises: {sorted(STATUSES)}",
         )
+    row = next((r for r in rows_of(text) if r["name"] == name), None)
+    if row is None:
+        return text, f"no row named {name} in {project}/{roadmap_path(project).name}"
+    if row["status"] == "[no]":
+        return (
+            text,
+            f"{name} is a declared non-goal; that is a decision, not a status to set",
+        )
+    if new_status in ("[ok]", "[x]"):
+        ok, why = test_evidence(project, row["where"], row["evidence"])
+        if not ok:
+            return text, f"refusing to mark {name} done: {why}"
     lines = text.splitlines(keepends=True)
-    for index, line in enumerate(lines):
-        if not line.startswith("| `"):
-            continue
-        cells = [c.strip() for c in line.split("|")[1:-1]]
-        if len(cells) < 4 or cells[0].strip("`").removesuffix("()") != name:
-            continue
-        current = cells[2].strip("`").lower()
-        if current == "[no]":
-            return (
-                text,
-                f"{name} is a declared non-goal; that is a decision, not a status to set",
-            )
-        if new_status in ("[ok]", "[x]"):
-            ok, why = test_evidence(project, cells[3])
-            if not ok:
-                return text, f"refusing to mark {name} done: {why}"
-        cells[2] = f"`{new_status}`"
-        lines[index] = "| " + " | ".join(cells) + " |\n"
-        return "".join(lines), ""
-    return text, f"no row named {name} in {project}/ROADMAP.md"
+    number = int(row["line"])
+    line = lines[number - 1]
+    body = line.rstrip("\r\n")
+    column = roadmap.status_column(text, number)
+    lines[number - 1] = (
+        roadmap.replace_status(body, new_status, column) + line[len(body) :]
+    )
+    return "".join(lines), ""
 
 
 def propose_status(project: str, name: str, new_status: str, write: bool) -> str:
@@ -186,7 +197,7 @@ def propose_status(project: str, name: str, new_status: str, write: bool) -> str
     if not write:
         return f"would write (pass write=true): {name} -> {new_status}\n\n{context_for(project, name, 3)}"
     path.write_text(updated, encoding="utf-8")
-    return f"{project}/ROADMAP.md: {name} -> {new_status}. Commit it with the code and the named test."
+    return f"{project}/{path.name}: {name} -> {new_status}. Commit it with the code and the named test."
 
 
 def _gh_edit_assignee(repo: str, number: str, flag: str, who: str) -> str:

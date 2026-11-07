@@ -24,7 +24,10 @@ import pathlib
 import re
 from dataclasses import dataclass
 
-TEST_REF = re.compile(r"([\w./\\-]+\.py)::(\w+)")
+import roadmap
+
+# The grammar lives in roadmap.py; the name stays importable from here for callers that already use it.
+TEST_REF = roadmap.TEST_REF
 
 
 @dataclass(frozen=True)
@@ -90,20 +93,9 @@ def short_summary(stub: Stub | None, limit: int = 64) -> str:
     return text[:limit].rsplit(" ", 1)[0].rstrip(",;: ") + " ..."
 
 
-def ladder_of(text: str) -> dict[str, str]:
-    """Milestone id -> its full description, continuation lines included."""
-    found: dict[str, str] = {}
-    current: str | None = None
-    for line in text.splitlines():
-        match = re.match(r"^- (M\d+)\s+(.*)$", line)
-        if match:
-            current = match.group(1)
-            found[current] = match.group(2).strip()
-        elif current and line.startswith("  ") and line.strip():
-            found[current] += " " + line.strip()
-        else:
-            current = None
-    return found
+def ladder_of(text: str, form: str = "M") -> dict[str, str]:
+    """Milestone id -> its full description, continuation lines included. See roadmap.ladder_of for forms."""
+    return roadmap.ladder_of(text, form)
 
 
 def milestone_title(milestone: str, ladder: dict[str, str], limit: int = 120) -> str:
@@ -133,31 +125,20 @@ def notes_for(text: str, row_title: str, limit: int = 3, width: int = 900) -> li
 
 
 def errata_lines(text: str, spec: str) -> list[str]:
-    """The `RFC n carries ...` lines ROADMAP.md records for each document the spec cell cites."""
-    out: list[str] = []
-    for number in dict.fromkeys(re.findall(r"RFC\s*(\d+)", spec)):
-        for line in text.splitlines():
-            if re.match(rf"^- RFC {number}\b", line):
-                out.append(line[2:].strip())
-    return out
+    """The errata-section lines that mention any document the spec cell cites."""
+    return roadmap.errata_lines(text, spec)
 
 
-def test_evidence(root: pathlib.Path, project: str, where: str) -> tuple[bool, str]:
-    """Does the row's named test file exist and define the named symbol?
+def test_evidence(
+    root: pathlib.Path, project: str, where: str, evidence: str = ""
+) -> tuple[bool, str]:
+    """Do the row's named tests exist, by exact, collectable name? One implementation: roadmap.evidence.
 
     A floor, not the rule: only CI can show a test would fail if the behaviour regressed. What this
-    refuses is the cheaper lie, a row pointing at a file or a symbol nobody wrote.
+    refuses is the cheaper lie, a row pointing at a file or a symbol nobody wrote. A reference marked
+    `(to be written)` never counts.
     """
-    found = TEST_REF.search(where)
-    if not found:
-        return False, f"the Where cell names no file::symbol: {where!r}"
-    relative, symbol = found.group(1), found.group(2)
-    path = root / project / relative
-    if not path.is_file():
-        return False, f"{relative} does not exist in {project}"
-    if f"def {symbol}" not in path.read_text(encoding="utf-8"):
-        return False, f"{relative} defines no {symbol}"
-    return True, f"{relative} defines {symbol}"
+    return roadmap.evidence(root, project, where, evidence)
 
 
 def dependency_lines(root: pathlib.Path, name: str) -> list[str]:
