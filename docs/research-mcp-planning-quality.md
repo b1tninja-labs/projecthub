@@ -332,6 +332,7 @@ Pilot result (ctspy, ROADMAP.md:24-25):
 - The 3 suite-wide survivors are `leaf_index > tree_size`, and `sn == 0` removal at lines 197 and 250.
 - `verify_consistency` accepts a proof for a larger claimed second up to the next power of two. This was measured for first=2 (accepts 3-4) and first=4 (accepts 5-8). The docstring says first==1 only.
 - rfclib is empty on this machine. Run `rfclib init` and read RFC 9162 before changing anything.
+- Reproduced by `mutate.py` (slice 10, 2026-11-07) with its fixed refusal operators instead of the pilot's hand-picked 7: each named test kills 0 of 11 per row, test_merkle.py kills 7 of 11, and the pilot's three survivors are among those left. The count differs from 7 because the operators are mechanical; the verdict does not.
 
 ---
 

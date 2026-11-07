@@ -10,6 +10,8 @@ L3 Differential  head's tests run against base's source must FAIL - a real test 
                  import error - and the same node must PASS on head. A test that passes on base was not
                  written for this change; one that only errors on base proves the module is missing, not that
                  the behaviour is checked.
+L4 Kill          the named test kills at least one refusal-weakening mutant of the row's function
+                 (mutate.py): a test that only asserts True on honest inputs kills none. Off with --no-mutate.
 
 Both trees are taken with `git archive` into a temporary directory outside the repository, so the check never
 writes to the work tree and never registers a worktree. Before trusting a run it confirms the package was
@@ -334,6 +336,7 @@ class Audit:
     node: str = ""
     l1: dict[str, object] = field(default_factory=dict)
     l3: dict[str, object] = field(default_factory=dict)
+    l4: dict[str, object] = field(default_factory=dict)
     ok: bool = False
     reason: str = ""
 
@@ -363,6 +366,7 @@ def audit_row(
     bases: pathlib.Path,
     scratch: pathlib.Path,
     runner: Callable[..., Run] = run_node,
+    mutate: bool = True,
 ) -> Audit:
     out = Audit(f"{project}:{row['name']}", row["title"])
     node, state = roadmap.named_test(heads, project, row["where"], row["evidence"])
@@ -386,6 +390,25 @@ def audit_row(
     out.l3 = {"ok": ok, **detail}
     out.ok = ok
     out.reason = "" if ok else f"L3: {detail['reason']}"
+    if not ok or not mutate:
+        return out
+    import mutate as M
+
+    target = M.locate(head, row["name"])
+    if target is None:
+        out.l4 = {
+            "ok": False,
+            "error": f"{row['name']} names no module.function in the package",
+        }
+    else:
+        out.l4 = M.audit(head, target[0], target[1], [node], scratch)
+    out.ok = bool(out.l4["ok"])
+    if not out.ok:
+        out.reason = "L4: " + (
+            f"the named test kills 0 of {out.l4['total']} refusal mutants: it cannot tell an accept from a refusal"
+            if out.l4.get("total")
+            else str(out.l4["error"])
+        )
     return out
 
 
@@ -397,8 +420,9 @@ def check(
     rows: Iterable[str] = (),
     package: str = "",
     runner: Callable[..., Run] = run_node,
+    mutate: bool = True,
 ) -> dict[str, object]:
-    """The roadmap-evidence record for `repo` between two commits."""
+    """The roadmap-evidence record for `repo` between two commits. `mutate` adds L4 (mutate.py)."""
     base_sha, head_sha = resolve(repo, base_ref), resolve(repo, head_ref)
     folder = roadmap.DIRECTORIES.get(project, project)
     with tempfile.TemporaryDirectory(prefix="roadmap-evidence-") as tmp:
@@ -426,7 +450,7 @@ def check(
             []
             if isolation
             else [
-                audit_row(after[r], project, heads, bases, scratch, runner)
+                audit_row(after[r], project, heads, bases, scratch, runner, mutate)
                 for r in wanted
             ]
         )
@@ -454,6 +478,13 @@ def annotate(record: dict[str, object]) -> list[str]:
     ]
 
 
+def _passed(row: dict[str, object]) -> str:
+    l3, l4 = row["l3"], row["l4"]
+    assert isinstance(l3, dict) and isinstance(l4, dict)
+    kills = f"; kills {l4['killed']}/{l4['total']} refusal mutants" if l4 else ""
+    return f"{l3['reason']}{kills}"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", type=pathlib.Path, default=pathlib.Path.cwd())
@@ -476,6 +507,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=pathlib.Path,
         help="write the record here (outside any work tree)",
     )
+    parser.add_argument("--no-mutate", action="store_true", help="skip L4 (mutation)")
     args = parser.parse_args(argv)
     if args.json is not None:
         import verify
@@ -485,7 +517,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"error: {refused}", file=sys.stderr)
             return 2
     record = check(
-        args.repo.resolve(), args.project, args.base, args.head, args.row, args.package
+        args.repo.resolve(),
+        args.project,
+        args.base,
+        args.head,
+        args.row,
+        args.package,
+        mutate=not args.no_mutate,
     )
     if args.json is not None:
         args.json.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -499,7 +537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     for r in rows:
         print(
-            f"{'PASS' if r['ok'] else 'FAIL'}  {r['row']}  {r['node'] or '-'}  {r['reason'] or r['l3']['reason']}"
+            f"{'PASS' if r['ok'] else 'FAIL'}  {r['row']}  {r['node'] or '-'}  {r['reason'] or _passed(r)}"
         )
     if os.environ.get("GITHUB_ACTIONS") == "true":
         print("\n".join(annotate(record)))

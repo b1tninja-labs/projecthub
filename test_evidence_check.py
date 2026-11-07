@@ -15,7 +15,7 @@ MATRIX = """# demo
 
 | Obligation | Spec | Status | Where |
 |---|---|---|---|
-| `demo.double` | RFC 0000 | {status} | `tests/test_demo.py::test_double` |
+| `core.double` | RFC 0000 | {status} | `tests/test_demo.py::test_double` |
 """
 STUB = "def double(n):\n    raise NotImplementedError\n"
 REAL = "def double(n):\n    return 2 * n\n"
@@ -93,7 +93,7 @@ def test_an_assert_true_test_is_rejected_at_l1(repo):
         "from demo import double\n\ndef test_double():\n    double(2)\n    assert True\n",
     )
     record = E.check(root, "demo", base)
-    assert record["audited"] == ["demo.double"]
+    assert record["audited"] == ["core.double"]
     (row,) = record["rows"]
     assert row["ok"] is False and record["ok"] is False
     assert row["reason"].startswith("L1: every assert has a constant condition"), row
@@ -235,3 +235,32 @@ def test_the_cli_refuses_a_record_path_inside_a_work_tree(repo, capsys):
         == 2
     )
     assert "inside the git work tree" in capsys.readouterr().err
+
+
+VERIFIER = "def double(n) -> bool:\n    if n < 0:\n        return False\n    return n % 2 == 0\n"
+
+
+def test_a_test_that_never_tries_a_refusal_fails_at_l4(repo):
+    root, base = repo
+    _flip(
+        root,
+        "from demo import double\n\ndef test_double():\n    assert double(4)\n",
+        source=VERIFIER,
+    )
+    (row,) = E.check(root, "demo", base)["rows"]
+    assert row["l3"]["ok"] is True
+    assert row["ok"] is False and row["l4"]["killed"] == 0, row["l4"]
+    assert row["reason"].startswith("L4: the named test kills 0 of"), row["reason"]
+
+
+def test_l4_passes_with_a_kill_and_can_be_switched_off(repo):
+    root, base = repo
+    _flip(
+        root,
+        "from demo import double\n\ndef test_double():\n    assert double(4)\n    assert double(-2) is False\n",
+        source=VERIFIER,
+    )
+    (row,) = E.check(root, "demo", base)["rows"]
+    assert row["ok"] is True and row["l4"]["killed"] >= 1, row["l4"]
+    (off,) = E.check(root, "demo", base, mutate=False)["rows"]
+    assert off["ok"] is True and off["l4"] == {}
