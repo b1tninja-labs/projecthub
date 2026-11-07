@@ -1,8 +1,8 @@
 """The guard is the point. Everything else in planner.py is a convenience read.
 
-These tests do not touch the network or the cloud. They use a row shape pointed at a real file in pkix
-(`tests/test_roadmap_rows.py`) and a project name that cannot exist, so the outcomes depend on nothing but
-the guard's own logic.
+These tests do not touch the network, the cloud, or this machine's directory layout. The `workspace`
+fixture builds a project tree in tmp and points planner.ROOT at it: an earlier version read the real
+D:/code checkout, passed locally, and failed in CI where that path does not exist.
 """
 
 from __future__ import annotations
@@ -18,6 +18,20 @@ PHANTOM_ROW = (
 NONGOAL_ROW = "| `crypto.parse()` | design | `[no]` | `tests/test_roadmap_rows.py::test_matrix_has_rows` |\n"
 
 
+@pytest.fixture
+def workspace(tmp_path, monkeypatch):
+    """A project tree the guard can check against, so no assertion depends on this machine's layout."""
+    project = tmp_path / "pkix"
+    (project / "tests").mkdir(parents=True)
+    (project / "tests" / "test_roadmap_rows.py").write_text(
+        "def test_matrix_has_rows():\n    assert True\n\n"
+        "def test_every_row_names_a_real_callable():\n    assert True\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(p, "ROOT", tmp_path)
+    return tmp_path
+
+
 def test_open_row_can_move_to_partial():
     updated, refusal = p.rewrite_row(PHANTOM_ROW, "pkix", "a.b", "[part]")
     assert refusal == "", refusal
@@ -31,7 +45,7 @@ def test_done_is_refused_when_the_named_test_file_is_absent():
     assert updated == PHANTOM_ROW
 
 
-def test_done_is_refused_when_the_symbol_is_absent():
+def test_done_is_refused_when_the_symbol_is_absent(workspace):
     _, refusal = p.rewrite_row(
         "| `x.y()` | s | `[ ]` | `tests/test_roadmap_rows.py::test_nobody_wrote_this` |\n",
         "pkix",
@@ -41,7 +55,7 @@ def test_done_is_refused_when_the_symbol_is_absent():
     assert "defines no test_nobody_wrote_this" in refusal
 
 
-def test_done_is_permitted_when_the_test_file_defines_the_symbol():
+def test_done_is_permitted_when_the_test_file_defines_the_symbol(workspace):
     updated, refusal = p.rewrite_row(REAL_TEST_ROW, "pkix", "x.y", "[x]")
     assert refusal == "", refusal
     assert "`[x]`" in updated
@@ -57,11 +71,19 @@ def test_unknown_status_and_unknown_row_are_rejected():
     assert "no row named" in p.rewrite_row(PHANTOM_ROW, "pkix", "q.r", "[part]")[1]
 
 
-def test_evidence_reports_the_file_it_checked():
+def test_evidence_reports_the_file_it_checked(workspace):
     ok, why = p.test_evidence(
         "pkix", "`tests/test_roadmap_rows.py::test_matrix_has_rows`"
     )
     assert ok and why == "tests/test_roadmap_rows.py defines test_matrix_has_rows"
+
+
+def test_propose_status_refuses_and_leaves_the_file_alone(workspace):
+    path = workspace / "pkix" / "ROADMAP.md"
+    path.write_text(PHANTOM_ROW, encoding="utf-8")
+    outcome = p.propose_status("pkix", "a.b", "[ok]", True)
+    assert outcome.startswith("REFUSED:")
+    assert path.read_text(encoding="utf-8") == PHANTOM_ROW
 
 
 def test_mcp_surface_exposes_exactly_five_tools():

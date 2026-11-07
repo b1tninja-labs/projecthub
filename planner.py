@@ -19,13 +19,18 @@ copy it.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import subprocess
 import sys
 
 from sync_roadmap import MARKER, PROJECTS, STATUSES, gh, rows_of
-from verify import ROOT
+
+# Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
+# this machine's layout into every read and write; the planner's own tests discovered that by passing
+# here and failing in CI, where D:/code does not exist.
+ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
 
 ORG = "b1tninja"
 OPENISH = ("open",)
