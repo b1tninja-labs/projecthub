@@ -136,6 +136,7 @@ def test_mcp_tools_are_four_read_only_tools_with_output_schemas():
     assert names == [
         "forge_context",
         "forge_next",
+        "forge_packet",
         "forge_propose_status",
         "forge_status",
     ]
@@ -340,3 +341,101 @@ def test_ready_rows_hold_back_inactive_plan_and_blocked_projects(
     }
     assert got["ready_total"] == 3 and got["truncated"] is False
     assert p.ready_rows({"alpha"}, limit=1, root=root)["truncated"] is True
+
+
+def test_a_leased_row_is_held_back_as_in_progress(workspace, monkeypatch):
+    import portfolio
+
+    _project(
+        workspace,
+        "alpha",
+        ["| `a.x()` | RFC 1 | `[ ]` | `tests/test_a.py::test_real` | | M1 |\n"],
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "entries",
+        lambda: [portfolio.Entry("alpha", "Library", 1, 1, "alpha", "", "s4")],
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "state",
+        lambda _, e: portfolio.State("Implemented", 0, 0, "ROADMAP.md", ""),
+    )
+    got = p.ready_rows({"alpha"}, root=workspace, leased={"alpha:a.x"})
+    assert got["ready"] == [] and got["skipped"] == {"leased: in progress": 1}
+
+
+def test_a_packet_stays_under_the_limit_and_carries_no_specification_text(
+    workspace, monkeypatch
+):
+    import json
+
+    import portfolio
+
+    row = "| `a.x()` | RFC 5280 sec. 6.1 | `[ ]` | `tests/test_a.py::test_x` (to be written) | | M1 |\n"
+    _project(workspace, "alpha", [row])
+    roadmap_file = workspace / "alpha" / "ROADMAP.md"
+    huge = " ".join(
+        ["`a.x()` needs the long note."] * 4000
+    )  # ~120 KB of prose about the row
+    roadmap_file.write_text(
+        roadmap_file.read_text(encoding="utf-8") + "\n" + huge + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "entries",
+        lambda: [portfolio.Entry("alpha", "Library", 1, 1, "alpha", "", "s4")],
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "state",
+        lambda _, e: portfolio.State("Implemented", 1, 0, "ROADMAP.md", ""),
+    )
+    got = p.packet("alpha:a.x", root=workspace)
+    assert len(json.dumps(got)) <= p.PACKET_LIMIT, (
+        "a 120 KB note cannot push a packet past the limit"
+    )
+    monkeypatch.setattr(p, "PACKET_LIMIT", 3000)
+    tight = p.packet("alpha:a.x", root=workspace)
+    assert len(json.dumps(tight)) <= 3000 and tight["truncated"] == ["notes"], (
+        "cut, and said so"
+    )
+    assert got["spec"] == "RFC 5280 sec. 6.1", (
+        "the spec is the cell, never the document's text"
+    )
+    assert "rfclib" in got["spec_note"]
+    assert (
+        got["named_test"] == "tests/test_a.py::test_x"
+        and got["test_state"] == "to be written"
+    )
+    assert got["acceptance"]["test"].endswith("tests/test_a.py::test_x")
+    assert got["milestone_text"] == "first"
+
+
+def test_a_packet_refuses_plan_directories_unknown_and_ambiguous_rows(
+    workspace, monkeypatch
+):
+    import portfolio
+
+    row = "| `a.x()` | RFC 1 | `[ ]` | `tests/test_a.py::test_x` (to be written) | | M1 |\n"
+    _project(workspace, "alpha", [row])
+    _project(workspace, "beta", [row])
+    _project(workspace, "plan", [row], pyproject=False)
+    entries = [
+        portfolio.Entry("alpha", "Library", 1, 1, "alpha", "", "s4"),
+        portfolio.Entry("beta", "Library", 1, 1, "beta", "", "s4"),
+        portfolio.Entry("plan", "Plan", 1, 1, "plan", "", "s4"),
+    ]
+    monkeypatch.setattr(portfolio, "entries", lambda: entries)
+    monkeypatch.setattr(
+        portfolio,
+        "state",
+        lambda _, e: portfolio.State("Shell", 1, 0, "ROADMAP.md", ""),
+    )
+    with pytest.raises(LookupError, match="use project:row"):
+        p.packet("a.x", root=workspace)
+    with pytest.raises(LookupError, match="plan directory"):
+        p.packet("plan:a.x", root=workspace)
+    with pytest.raises(LookupError, match="no project"):
+        p.packet("nope:a.x", root=workspace)
+    assert p.packet("beta:a.x", root=workspace)["project"] == "beta"

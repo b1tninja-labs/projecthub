@@ -35,7 +35,7 @@ import os
 import pathlib
 import subprocess
 import sys
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import roadmap
 from roadmap import rows_of
@@ -147,6 +147,7 @@ def ready_rows(
     project: str = "",
     limit: int = 10,
     root: pathlib.Path | None = None,
+    leased: set[str] | frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Open rows an agent may start now, ranked, and how many were held back and why.
 
@@ -154,9 +155,10 @@ def ready_rows(
     directory, and depends on nothing that is not yet code. Ranking: rows whose named test already exists
     first, then milestone order on the project's own ladder, then how many projects wait on this one.
 
-    One deliberate departure from the research design: a row whose test is "(to be written)" stays ready
-    here, ranked after written ones, because leases (which would mark "this claim is for writing the test")
-    do not exist yet. Excluding them would leave almost no shell row ready.
+    A row with a live lease (leases.py) is held back as in progress. One deliberate departure from the
+    research design: a row whose test is "(to be written)" stays ready, ranked after written ones, because
+    for a generated shell writing the test is the first step of the work, and the lease an agent then takes
+    is what marks it in progress.
     """
     import portfolio
 
@@ -201,7 +203,9 @@ def ready_rows(
             skip(f"blocked by {', '.join(blockers)} (not yet code)", len(open_rows))
             continue
         order = list(roadmap.ladder_for(base, entry.name))
-        for row in open_rows:
+        mine = [r for r in open_rows if f"{entry.name}:{r['name']}" not in leased]
+        skip("leased: in progress", len(open_rows) - len(mine))
+        for row in mine:
             node, test_state = roadmap.named_test(
                 base, entry.name, row["where"], row["evidence"]
             )
@@ -420,6 +424,231 @@ def claim(project: str, name: str, who: str) -> str:
     )
 
 
+PACKET_LIMIT = 50_000
+
+
+def _live_leases() -> set[str]:
+    """Row keys under a live lease. No lease database yet means no leases, not an error."""
+    import leases
+
+    return leases.Store().live_keys()
+
+
+def _live_lease_rows() -> dict[str, dict[str, str]]:
+    import leases
+
+    return {
+        x.row_key: {
+            "lease_id": x.lease_id,
+            "holder": x.holder,
+            "expires_at": leases._iso(x.expires_at),
+        }
+        for x in leases.Store().live()
+    }
+
+
+def _git_lines(folder: pathlib.Path, *args: str) -> list[str]:
+    done = subprocess.run(  # noqa: S603, S607
+        ["git", "-C", str(folder), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    return done.stdout.splitlines() if done.returncode == 0 else []
+
+
+def _find_row(
+    row_ref: str, base: pathlib.Path
+) -> tuple[Any, pathlib.Path, dict[str, str]]:
+    """The portfolio entry, matrix file and row a reference names: project:row, or a row id unique across projects."""
+    import portfolio
+
+    entries = {e.name: e for e in portfolio.entries()}
+    project, _, row_id = row_ref.rpartition(":")
+    if project and project not in entries:
+        raise LookupError(f"no project {project!r} in the portfolio")
+    hits = []
+    for name in [project] if project else sorted(entries):
+        path = roadmap.matrix_path(base, name)
+        if path is None:
+            continue
+        for row in rows_of(path.read_text(encoding="utf-8")):
+            if row["name"] == row_id:
+                hits.append((entries[name], path, row))
+    if not hits:
+        raise LookupError(f"no row {row_ref!r} in any obligation matrix")
+    if len(hits) > 1:
+        owners = ", ".join(sorted(h[0].name for h in hits))
+        raise LookupError(f"{row_id!r} is a row of {owners}; use project:row")
+    return hits[0]
+
+
+def packet(
+    row_ref: str,
+    root: pathlib.Path | None = None,
+    leases: dict[str, dict[str, str]] | None = None,
+) -> dict[str, object]:
+    """The context an agent needs to start a row, assembled from files, git and the lease store.
+
+    It never carries specification text. The spec cell says which document governs the row; the agent reads
+    the clause itself through rfclib, because a packet that paraphrased normative text would be the very
+    "from memory" citation the workspace forbids.
+    """
+    import portfolio
+    import rowdoc
+
+    base = root or ROOT
+    entry, path, row = _find_row(row_ref, base)
+    name = entry.name
+    folder = roadmap.project_dir(base, name)
+    if entry.kind == "Plan" or not (folder / "pyproject.toml").is_file():
+        raise LookupError(
+            f"{name} is a plan directory: its deliverable is a document, not code"
+        )
+    text = path.read_text(encoding="utf-8")
+    key = f"{name}:{row['name']}"
+    node, test_state = roadmap.named_test(base, name, row["where"], row["evidence"])
+    ladder = roadmap.ladder_for(base, name)
+    stub = rowdoc.stub_of(base, folder.name, row["name"])
+    everyone = portfolio.entries()
+    states = {e.name: portfolio.state(base, e) for e in everyone}
+    depends = [
+        {"project": d, "state": states[d].label if d in states else "Absent"}
+        for d in entry.depends
+    ]
+    waiting = sorted(e.name for e in everyone if name in e.depends)
+    decisions: list[str] = []
+    portfolio_md = base / "PORTFOLIO.md"
+    if portfolio_md.is_file():
+        names = {e.name for e in everyone}
+        decisions = [
+            f"Decision {d.number}: {d.title.replace('`', '')}"
+            for d in portfolio.decisions(
+                portfolio_md.read_text(encoding="utf-8"), names
+            )
+            if not d.decided and name in d.projects
+        ]
+    agents = folder / "AGENTS.md"
+    agent_lines = (
+        agents.read_text(encoding="utf-8").splitlines() if agents.is_file() else []
+    )
+    rel = path.relative_to(folder).as_posix()
+    history = _git_lines(
+        folder, "log", "-n", "10", "--format=%h %as %s", "-S", row["title"], "--", rel
+    )
+    test_path = node.split("::", 1)[0] if "::" in node else ""
+    package = folder.name.replace("-", "_")
+    out: dict[str, object] = {
+        "row_id": key,
+        "project": name,
+        "kind": entry.kind,
+        "tier": entry.tier,
+        "wave": entry.wave,
+        "status": row["status"],
+        "milestone": row["milestone"] or "",
+        "milestone_text": ladder.get(row["milestone"], ""),
+        "where": row["where"],
+        "stub": (
+            {
+                "path": stub.path,
+                "signature": stub.signature,
+                "still_stub": stub.still_stub,
+                "module": stub.module_summary,
+            }
+            if stub
+            else None
+        ),
+        "named_test": node,
+        "test_state": test_state,
+        "spec": row["spec"],
+        "spec_note": (
+            "The Spec cell only. Read the governing clause with rfclib (or itulib for X.680/X.690) and cite it; "
+            "never work from a paraphrase."
+        ),
+        "acceptance": {
+            "test": (
+                f"cd {folder.as_posix()} && python -m pytest -q -p no:cacheprovider {node}"
+                if test_path
+                else ""
+            ),
+            "gates": (
+                f"cd {folder.as_posix()} && python -m pytest -q && python -m ruff check . && "
+                f"python -m ruff format --check . && python -m mypy {package}"
+            ),
+            "done_when": (
+                f"the {row['title']} row reads [ok] in {rel} in the same commit as the code and the named test, "
+                "and that test fails when the behaviour is broken"
+            ),
+        },
+        "depends_on": depends,
+        "unblocks": waiting,
+        "open_decisions": decisions,
+        "invariants": {
+            "file": agents.relative_to(base).as_posix() if agents.is_file() else "",
+            "sections": [
+                line.lstrip("# ").strip()
+                for line in agent_lines
+                if line.startswith("## ")
+            ],
+        },
+        "notes": rowdoc.notes_for(text, row["title"], limit=5, width=4000),
+        "history": history,
+        "lease": (leases or {}).get(key),
+        "evidence": _recorded_evidence(name, node),
+        "files": [f for f in (rel, test_path, stub.path if stub else "") if f],
+        "truncated": [],
+    }
+    return _fit(out)
+
+
+def _recorded_evidence(project: str, node: str) -> dict[str, object] | None:
+    """The node's result in the evidence record FORGE_EVIDENCE points at, if any (verify.py --json)."""
+    record = os.environ.get("FORGE_EVIDENCE")
+    if not (record and node):
+        return None
+    try:
+        data = json.loads(pathlib.Path(record).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for entry in data.get("projects", []):
+        if entry.get("project") == project:
+            hit = next(
+                (t for t in entry.get("tests", []) if t.get("node_id") == node), None
+            )
+            return {
+                "sha": entry.get("sha"),
+                "dirty": entry.get("dirty"),
+                "generated": data.get("generated"),
+                "result": hit,
+            }
+    return None
+
+
+def _fit(out: dict[str, object]) -> dict[str, object]:
+    """Keep the packet under PACKET_LIMIT characters, cutting the longest optional parts first and saying so."""
+    truncated: list[str] = []
+    while len(json.dumps(out)) > PACKET_LIMIT:
+        notes = out["notes"]
+        history = out["history"]
+        if isinstance(notes, list) and notes:
+            longest = max(range(len(notes)), key=lambda i: len(notes[i]))
+            if len(notes[longest]) > 400:
+                notes[longest] = notes[longest][:400] + " ..."
+            else:
+                notes.pop()
+            if "notes" not in truncated:
+                truncated.append("notes")
+        elif isinstance(history, list) and history:
+            history.pop()
+            if "history" not in truncated:
+                truncated.append("history")
+        else:
+            break
+    out["truncated"] = truncated
+    return out
+
+
 INSTRUCTIONS = (
     "Portfolio planning for the protocol SDK workspace. Read tools return the file or command an answer "
     "came from. ROADMAP.md is authoritative and issues are derived from it, so a row is the plan and the "
@@ -439,6 +668,34 @@ class StatusOut(TypedDict):
 
 class StatusesOut(TypedDict):
     projects: list[StatusOut]
+
+
+class PacketOut(TypedDict):
+    row_id: str
+    project: str
+    kind: str
+    tier: int
+    wave: int
+    status: str
+    milestone: str
+    milestone_text: str
+    where: str
+    stub: dict[str, object] | None
+    named_test: str
+    test_state: str
+    spec: str
+    spec_note: str
+    acceptance: dict[str, str]
+    depends_on: list[dict[str, str]]
+    unblocks: list[str]
+    open_decisions: list[str]
+    invariants: dict[str, object]
+    notes: list[str]
+    history: list[str]
+    lease: dict[str, str] | None
+    evidence: dict[str, object] | None
+    files: list[str]
+    truncated: list[str]
 
 
 class NextOut(TypedDict):
@@ -525,7 +782,24 @@ def build():
             raise ToolError(
                 "no project is marked Active on board #4; set Active on at most two projects, or pass active=[...]"
             )
-        return ready_rows(chosen, project, limit)  # type: ignore[return-value]
+        return ready_rows(chosen, project, limit, leased=_live_leases())  # type: ignore[return-value]
+
+    @app.tool(
+        description=(
+            "Everything needed to start one row, in one answer under 50,000 characters: where it lives, the "
+            "named test and whether it exists, the spec cell (never the spec's text: read that with rfclib), the "
+            "exact acceptance commands, dependencies and their state, open decisions naming the project, the "
+            "project's AGENTS.md sections, ROADMAP notes about the row, recent commits touching it, any live "
+            "lease, and the latest recorded evidence. row_id is project:row or a row id unique across projects."
+        ),
+        annotations=read_only,
+        structured_output=True,
+    )
+    def forge_packet(row_id: str) -> PacketOut:
+        try:
+            return packet(row_id, leases=_live_lease_rows())  # type: ignore[return-value]
+        except LookupError as error:
+            raise ToolError(str(error)) from error
 
     @app.tool(
         description="The prose around a row, where blocked notes and dead ends are recorded.",
