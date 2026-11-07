@@ -121,14 +121,75 @@ def test_the_status_column_is_found_by_header(workspace):
     assert updated.endswith("| `x.y` | [part] | [ ] | w |\n")
 
 
-def test_mcp_surface_exposes_exactly_five_tools():
+def _tools():
     pytest.importorskip("mcp")
     import anyio
 
-    listed = anyio.run(p.build().list_tools)
-    names = sorted(t.name for t in getattr(listed, "tools", listed))
-    assert len(names) == 5, names
-    assert all(n.startswith("forge_") for n in names), names
+    app = p.build()
+    listed = anyio.run(app.list_tools)
+    return app, list(getattr(listed, "tools", listed))
+
+
+def test_mcp_tools_are_four_read_only_tools_with_output_schemas():
+    _, tools = _tools()
+    names = sorted(t.name for t in tools)
+    assert names == [
+        "forge_context",
+        "forge_next_actions",
+        "forge_propose_status",
+        "forge_status",
+    ]
+    for tool in tools:
+        assert (
+            tool.annotations is not None and tool.annotations.read_only_hint is True
+        ), tool.name
+        assert tool.annotations.destructive_hint is False, tool.name
+        assert tool.output_schema, f"{tool.name} declares no outputSchema"
+
+
+def test_mcp_tools_cannot_write_roadmap(workspace):
+    """The MCP-writes decision: no tool reachable over MCP writes ROADMAP.md, even for a change the guard would allow."""
+    import anyio
+
+    app, tools = _tools()
+    path = workspace / "pkix" / "ROADMAP.md"
+    path.write_text(REAL_TEST_ROW, encoding="utf-8")
+    for tool in tools:
+        params = set(tool.input_schema.get("properties", {}))
+        assert "write" not in params, f"{tool.name} takes a write flag"
+    preview = anyio.run(
+        app.call_tool,
+        "forge_propose_status",
+        {"project": "pkix", "row": "x.y", "status": "[part]"},
+    )
+    assert preview.structured_content["would_write"] is True
+    assert "--write" in preview.structured_content["how_to_write"]
+    assert path.read_text(encoding="utf-8") == REAL_TEST_ROW, (
+        "the preview changed the file"
+    )
+
+
+def test_a_refusal_is_an_error_not_a_success_that_reads_refused(workspace):
+    import anyio
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    app, _ = _tools()
+    (workspace / "pkix" / "ROADMAP.md").write_text(PHANTOM_ROW, encoding="utf-8")
+    with pytest.raises(ToolError, match="REFUSED"):
+        anyio.run(
+            app.call_tool,
+            "forge_propose_status",
+            {"project": "pkix", "row": "a.b", "status": "[ok]"},
+        )
+
+
+def test_the_cli_writes_and_exits_nonzero_on_a_refusal(workspace, capsys):
+    path = workspace / "pkix" / "ROADMAP.md"
+    path.write_text(PHANTOM_ROW, encoding="utf-8")
+    assert p.cli(["status", "pkix", "a.b", "[ok]", "--write"]) == 1
+    assert path.read_text(encoding="utf-8") == PHANTOM_ROW
+    assert p.cli(["status", "pkix", "a.b", "[part]", "--write"]) == 0
+    assert "`[part]`" in path.read_text(encoding="utf-8")
 
 
 class FakeIssues:

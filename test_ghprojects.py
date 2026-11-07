@@ -314,3 +314,19 @@ def test_linked_ids_read_every_page():
 def test_linked_ids_refuse_an_unknown_connection():
     with pytest.raises(g.GhProjectsError):
         g.Projects(Fake([])).linked_ids("I1", "comments")
+
+
+def test_an_item_whose_field_values_span_pages_is_marked_truncated():
+    nodes = [
+        {
+            "id": "I1",
+            "type": "ISSUE",
+            "content": {"__typename": "Issue", "id": "N1", "url": "u1", "title": "T"},
+            "fieldValues": {"pageInfo": {"hasNextPage": True}, "nodes": []},
+        },
+        {"id": "I2", "type": "ISSUE", "content": None, "fieldValues": {"nodes": []}},
+    ]
+    fake = Fake([owner_reply("items", page(nodes))], scopes="project")
+    items = g.Projects(fake).items("me", 1)
+    assert [i.truncated for i in items] == [True, False]
+    assert "pageInfo { hasNextPage }" in fake.bodies()[0]["query"]

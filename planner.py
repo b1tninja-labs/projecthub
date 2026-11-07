@@ -14,6 +14,18 @@ What is deliberately absent: a task store. beads keeps issues in a Dolt database
 .taskmaster file; either would become a second source of truth for obligations, and ROADMAP.md plus its
 named tests is the authority CI can enforce. `claim` and `propose_status` move that authority, they do not
 copy it.
+
+Where the writes live (the MCP-writes decision, 2026-11-07: docs/research-mcp-planning-quality.md slice 1). The MCP server is read-only: every tool carries
+readOnlyHint, and `forge_propose_status` previews a change and runs the guard but cannot write. The two
+writes - flipping a row and claiming its issue - are this module's command line, so each one is a
+deliberate act a person or a script runs, not a tool an agent reaches for mid-turn:
+
+    python planner.py status <project> <row> <status> [--write]
+    python planner.py claim <project> <row> <login>
+
+The reason is the evidence rule. The guard checks that a named test exists; it cannot check that the test
+would fail if the behaviour regressed, so a write reachable from a tool call is a done row one confident
+sentence away.
 """
 
 from __future__ import annotations
@@ -23,6 +35,7 @@ import os
 import pathlib
 import subprocess
 import sys
+from typing import TypedDict
 
 import roadmap
 from roadmap import rows_of
@@ -286,6 +299,39 @@ INSTRUCTIONS = (
 )
 
 
+class StatusOut(TypedDict):
+    project: str
+    row_count: int
+    states: dict[str, int]
+    open_issues: object
+
+
+class StatusesOut(TypedDict):
+    projects: list[StatusOut]
+
+
+class ActionsOut(TypedDict):
+    project: str
+    source: str
+    actions: list[dict[str, str]]
+
+
+class ContextOut(TypedDict):
+    project: str
+    row: str
+    source: str
+    text: str
+
+
+class PreviewOut(TypedDict):
+    project: str
+    row: str
+    status: str
+    would_write: bool
+    context: str
+    how_to_write: str
+
+
 def build():
     """The MCP server. Imported here, not at module top, so the library works without mcp installed.
 
@@ -294,45 +340,118 @@ def build():
     server did not start.
     """
     from mcp.server.mcpserver import MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
+    from mcp.types import ToolAnnotations
 
+    read_only = ToolAnnotations(
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    )
     app = MCPServer(name="sdk-forge", instructions=INSTRUCTIONS)
 
     @app.tool(
-        description="Rows by state for every project with a matrix, plus open issue counts."
+        description="Rows by state for every project with a matrix, plus open issue counts.",
+        annotations=read_only,
+        structured_output=True,
     )
-    def forge_status(with_issues: bool = True) -> str:
-        return json.dumps(portfolio_status(with_issues), indent=2)
+    def forge_status(with_issues: bool = True) -> StatusesOut:
+        rows = sorted(portfolio_status(with_issues), key=lambda r: str(r["project"]))
+        return {
+            "projects": [
+                {
+                    "project": str(r["project"]),
+                    "row_count": int(r["rows"]),  # type: ignore[call-overload]
+                    "states": dict(r["by_state"]),  # type: ignore[call-overload]
+                    "open_issues": r.get("open_issues"),
+                }
+                for r in rows
+            ]
+        }
 
     @app.tool(
-        description="Unmet obligations in one project, each with its spec, named test and milestone."
+        description="Unmet obligations in one project, each with its spec, named test and milestone.",
+        annotations=read_only,
+        structured_output=True,
     )
-    def forge_next_actions(project: str, limit: int = 10) -> str:
-        return json.dumps(next_actions(project, limit), indent=2)
+    def forge_next_actions(project: str, limit: int = 10) -> ActionsOut:
+        found = next_actions(project, limit)
+        if found and "error" in found[0]:
+            raise ToolError(found[0]["error"])
+        return {"project": project, "source": f"{project}/ROADMAP.md", "actions": found}
 
     @app.tool(
-        description="The prose around a row, where blocked notes and dead ends are recorded."
+        description="The prose around a row, where blocked notes and dead ends are recorded.",
+        annotations=read_only,
+        structured_output=True,
     )
-    def forge_context(project: str, row: str) -> str:
-        return context_for(project, row)
-
-    @app.tool(
-        description="Assign the row's issue to a login and confirm by re-reading. Refuses if anyone else holds it."
-    )
-    def forge_claim(project: str, row: str, who: str) -> str:
-        return claim(project, row, who)
+    def forge_context(project: str, row: str) -> ContextOut:
+        text = context_for(project, row)
+        if text.startswith(f"{project} has no") or text.startswith("no mention of"):
+            raise ToolError(text)
+        return {
+            "project": project,
+            "row": row,
+            "source": f"{project}/ROADMAP.md",
+            "text": text,
+        }
 
     @app.tool(
         description=(
-            "Change a row's status in ROADMAP.md. Refuses a done status whose named test does not exist, "
-            "and refuses to change a declared non-goal. write=false previews."
-        )
+            "Preview a row status change and run the guard: refuses a done status whose named test does not "
+            "exist, and refuses to change a declared non-goal. Never writes; the write is a CLI command."
+        ),
+        annotations=read_only,
+        structured_output=True,
     )
-    def forge_propose_status(
-        project: str, row: str, status: str, write: bool = False
-    ) -> str:
-        return propose_status(project, row, status, write)
+    def forge_propose_status(project: str, row: str, status: str) -> PreviewOut:
+        outcome = propose_status(project, row, status, write=False)
+        if outcome.startswith("REFUSED:") or " has no ROADMAP.md" in outcome:
+            raise ToolError(outcome)
+        return {
+            "project": project,
+            "row": row,
+            "status": status,
+            "would_write": True,
+            "context": context_for(project, row, 3),
+            "how_to_write": f"python sdk-forge/planner.py status {project} {row} '{status}' --write",
+        }
 
     return app
+
+
+def cli(argv: list[str]) -> int:
+    """The two writes, as commands. Exit 1 on a refusal so a script cannot mistake it for success."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="planner.py", description="sdk-forge planner writes"
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    status = sub.add_parser(
+        "status", help="preview, or with --write apply, a row status change"
+    )
+    status.add_argument("project")
+    status.add_argument("row")
+    status.add_argument("status")
+    status.add_argument("--write", action="store_true")
+    claiming = sub.add_parser(
+        "claim", help="assign the row's issue to a login, confirmed by a re-read"
+    )
+    claiming.add_argument("project")
+    claiming.add_argument("row")
+    claiming.add_argument("who")
+    args = parser.parse_args(argv)
+    if args.command == "status":
+        outcome = propose_status(args.project, args.row, args.status, args.write)
+    else:
+        outcome = claim(args.project, args.row, args.who)
+    print(outcome)
+    refused = outcome.startswith(
+        ("REFUSED", "UNCONFIRMED", "could not", "no open issue")
+    ) or (" has no " in outcome)
+    return 1 if refused else 0
 
 
 def main() -> None:
@@ -342,8 +461,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        raise SystemExit(cli(sys.argv[1:]))
     print(
-        "sdk-forge planner: speak MCP on stdio; run it from a client, not a terminal",
+        "sdk-forge planner: speaks MCP on stdio; run it from a client, or use the status/claim commands",
         file=sys.stderr,
     )
     main()

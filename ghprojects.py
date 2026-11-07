@@ -138,6 +138,9 @@ class Item:
     url: str
     title: str
     values: dict[str, object] = field(default_factory=dict)
+    # True when the item has more field values than one page carried: its `values` are then incomplete,
+    # and a reader must say so rather than treat a missing field as unset.
+    truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -165,7 +168,7 @@ nodes { __typename
 """
 
 _VALUES = """
-fieldValues(first: 30) { nodes { __typename
+fieldValues(first: 30) { pageInfo { hasNextPage } nodes { __typename
   ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } }
   ... on ProjectV2ItemFieldNumberValue { number field { ... on ProjectV2FieldCommon { name } } }
   ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { name } } }
@@ -421,6 +424,11 @@ class Projects:
                         url=content.get("url", ""),
                         title=content.get("title", ""),
                         values=_values(node.get("fieldValues")),
+                        truncated=bool(
+                            ((node.get("fieldValues") or {}).get("pageInfo") or {}).get(
+                                "hasNextPage"
+                            )
+                        ),
                     )
                 )
         return out

@@ -132,8 +132,46 @@ def test_context_flattens_tree_links_and_board_fields():
             "fields": {"Level": "Project", "Rows done": 0.0},
         }
     ]
-    assert "error" in m.shape_context({"__typename": "PullRequest"})
-    assert "error" in m.shape_context({})
+    assert got["truncated"] == []
+    with pytest.raises(ValueError, match="PullRequest"):
+        m.shape_context({"__typename": "PullRequest"})
+    with pytest.raises(ValueError, match="nothing"):
+        m.shape_context({})
+
+
+def test_context_names_every_connection_that_had_more_than_one_page():
+    more = {"pageInfo": {"hasNextPage": True}, "nodes": []}
+    node = {
+        "__typename": "Issue",
+        "subIssues": more,
+        "blockedBy": {"pageInfo": {"hasNextPage": False}, "nodes": []},
+        "blocking": more,
+        "assignees": more,
+        "projectItems": {
+            "pageInfo": {"hasNextPage": True},
+            "nodes": [
+                {
+                    "project": {"number": 4, "title": "P", "owner": {"login": "o"}},
+                    "fieldValues": {"pageInfo": {"hasNextPage": True}, "nodes": []},
+                }
+            ],
+        },
+    }
+    got = m.shape_context(node)["truncated"]
+    assert got == [
+        "subIssues",
+        "blocking",
+        "assignees",
+        "projectItems",
+        "fieldValues on o#4 P",
+    ]
+
+
+def test_an_item_with_more_field_values_than_a_page_says_so():
+    cut = g.Item("I", "ISSUE", "N", "u", "t", {"Level": "Obligation"}, truncated=True)
+    assert m.compact(cut)["fields_truncated"] is True
+    assert "fields_truncated" not in m.compact(ITEMS[0])
+    assert m.overview([*ITEMS, cut])["truncated_items"] == 1
 
 
 class FakeClient:
@@ -190,12 +228,48 @@ def test_the_server_is_read_only_and_toolsets_select_tools(monkeypatch):
     assert "portfolio_overview" not in generic
 
 
+def test_every_tool_is_annotated_read_only_and_declares_an_output_schema(monkeypatch):
+    import anyio
+
+    pytest.importorskip("mcp")
+    monkeypatch.setenv("PROJECTS_MCP_TOOLSETS", "projects,portfolio")
+    listed = anyio.run(m.build(FakeClient()).list_tools)  # type: ignore[arg-type]
+    for tool in getattr(listed, "tools", listed):
+        assert tool.annotations is not None, tool.name
+        assert (
+            tool.annotations.read_only_hint is True
+            and tool.annotations.destructive_hint is False
+        ), tool.name
+        assert tool.output_schema and tool.output_schema.get("type") == "object", (
+            tool.name
+        )
+
+
+def test_items_report_truncation_when_more_matched_than_returned(monkeypatch):
+    import anyio
+
+    app, _ = tools(monkeypatch, "projects")
+    got = anyio.run(app.call_tool, "project_items", {"limit": 2}).structured_content
+    assert (
+        got["matched"] == len(ITEMS)
+        and got["returned"] == 2
+        and got["truncated"] is True
+    )
+    whole = anyio.run(app.call_tool, "project_items", {"limit": 50}).structured_content
+    assert whole["truncated"] is False
+
+
 def test_a_failure_is_an_error_naming_the_fix_not_an_empty_list(monkeypatch):
     import anyio
 
+    from mcp.server.mcpserver.exceptions import ToolError
+
     app, _ = tools(monkeypatch, "projects,portfolio")
-    result = anyio.run(app.call_tool, "projects_list", {"owner": "b1tninja"})
-    text = json.dumps(result, default=str)
-    assert "gh auth refresh -s project" in text
-    auth = json.dumps(anyio.run(app.call_tool, "projects_auth", {}), default=str)
-    assert "projects_readable" in auth and "false" in auth.lower()
+    with pytest.raises(ToolError, match="gh auth refresh -s project"):
+        anyio.run(app.call_tool, "projects_list", {"owner": "b1tninja"})
+    auth = anyio.run(app.call_tool, "projects_auth", {}).structured_content
+    assert (
+        auth["projects_readable"] is False
+        and auth["fix"] == "gh auth refresh -s project"
+    )
+    assert json.dumps(auth)  # structured content is plain JSON
