@@ -135,7 +135,7 @@ def test_mcp_tools_are_four_read_only_tools_with_output_schemas():
     names = sorted(t.name for t in tools)
     assert names == [
         "forge_context",
-        "forge_next_actions",
+        "forge_next",
         "forge_propose_status",
         "forge_status",
     ]
@@ -252,3 +252,91 @@ def test_claim_is_unconfirmed_when_the_reread_fails(monkeypatch):
     )
     assert p.claim("pkix", "a.b", "me").startswith("UNCONFIRMED")
     assert issues.edits == [("--add-assignee", "me")]
+
+
+def _project(root, name, rows, pyproject=True):
+    folder = root / name
+    (folder / "tests").mkdir(parents=True)
+    if pyproject:
+        (folder / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    table = "| Obligation | Spec | Status | Where | Evidence | Milestone |\n|---|---|---|---|---|---|\n"
+    (folder / "ROADMAP.md").write_text(
+        "- M1 first\n- M2 second\n\n" + table + "".join(rows), encoding="utf-8"
+    )
+    (folder / "tests" / "test_a.py").write_text(
+        "def test_real():\n    assert 1\n", encoding="utf-8"
+    )
+
+
+def test_named_test_comes_from_evidence_when_where_is_a_module(workspace):
+    root = workspace
+    _project(root, "ledger", [])
+    import roadmap
+
+    where = "`ledger/fanout.py` (planned)"
+    assert roadmap.named_test(
+        root, "ledger", where, "`tests/test_a.py::test_real`"
+    ) == (
+        "tests/test_a.py::test_real",
+        "exists",
+    )
+    assert roadmap.named_test(
+        root, "ledger", where, "`tests/test_b.py::test_x` (to be written)"
+    ) == (
+        "tests/test_b.py::test_x",
+        "to be written",
+    )
+    assert roadmap.named_test(root, "ledger", "`test_real`", "")[1] == "exists"
+    assert roadmap.named_test(root, "ledger", where, "") == ("", "none")
+
+
+def test_ready_rows_hold_back_inactive_plan_and_blocked_projects(
+    workspace, monkeypatch
+):
+    import portfolio
+
+    root = workspace
+    open_row = "| `a.{n}()` | RFC 1 | `[ ]` | `tests/test_a.py::test_{n}` (to be written) | | M{m} |\n"
+    done_row = "| `a.done()` | RFC 1 | `[ok]` | `tests/test_a.py::test_real` | | M1 |\n"
+    written = "| `a.w()` | RFC 1 | `[ ]` | `tests/test_a.py::test_real` | | M2 |\n"
+    _project(
+        root,
+        "alpha",
+        [open_row.format(n="x", m=2), open_row.format(n="y", m=1), written, done_row],
+    )
+    _project(root, "beta", [open_row.format(n="z", m=1)])
+    _project(root, "plan", [open_row.format(n="p", m=1)], pyproject=False)
+    _project(root, "gamma", [open_row.format(n="g", m=1)])
+    entries = [
+        portfolio.Entry("alpha", "Library", 1, 1, "alpha", "", "s4"),
+        portfolio.Entry("beta", "Library", 2, 2, "beta", "", "s4", ("alpha",)),
+        portfolio.Entry("plan", "Plan", 1, 3, "plan", "", "s4"),
+        portfolio.Entry("gamma", "Library", 3, 3, "gamma", "", "s4", ("beta",)),
+    ]
+    labels = {
+        "alpha": "Implemented",
+        "beta": "Shell",
+        "plan": "Plan only",
+        "gamma": "Shell",
+    }
+    monkeypatch.setattr(portfolio, "entries", lambda: entries)
+    monkeypatch.setattr(
+        portfolio,
+        "state",
+        lambda _, e: portfolio.State(labels[e.name], 0, 0, "ROADMAP.md", ""),
+    )
+    got = p.ready_rows({"alpha", "plan", "gamma"}, root=root)
+    assert [r["row_id"] for r in got["ready"]] == ["a.w", "a.y", "a.x"], (
+        "written test first, then M1 before M2"
+    )
+    assert (
+        got["ready"][0]["unblocks"] == 1
+        and "1 project(s) wait on alpha" in got["ready"][0]["why"]
+    )
+    assert got["skipped"] == {
+        "blocked by beta (not yet code)": 1,
+        "plan directory: the deliverable is a document": 1,
+        "project not Active": 1,
+    }
+    assert got["ready_total"] == 3 and got["truncated"] is False
+    assert p.ready_rows({"alpha"}, limit=1, root=root)["truncated"] is True

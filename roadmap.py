@@ -487,6 +487,45 @@ def _marked(cell: str, end: int) -> bool:
     return TO_BE_WRITTEN in window
 
 
+def named_test(
+    root: pathlib.Path, project: str, where: str, evidence_cell: str = ""
+) -> tuple[str, str]:
+    """(pytest node id, state) for the test a row names. state: exists, to be written, missing or none.
+
+    The node comes from Where when Where names one, and from Evidence when Where names a module instead:
+    certledger's cl.multi-path reads `certledger/fanout.py` (planned) in Where and carries its test in
+    Evidence, and reporting the module as the "named test" told an agent to run a file that is not a test.
+    """
+    folder = project_dir(root, project)
+    for cell in (where, evidence_cell):
+        for found in TEST_REF.finditer(cell):
+            relative, parts = found.group(1), found.group(2).split("::")[1:]
+            node = f"{relative}::{'::'.join(parts)}"
+            if _marked(cell, found.end()):
+                return node, "to be written"
+            tree = (
+                _parse_file(folder / relative)
+                if (folder / relative).is_file()
+                else None
+            )
+            return node, "exists" if tree is not None and not _defines(
+                tree, parts
+            ) else "missing"
+    for cell in (where, evidence_cell):
+        for found in BARE_TEST.finditer(cell):
+            name = found.group(1)
+            if _marked(cell, found.end()):
+                return name, "to be written"
+            tests = folder / "tests"
+            files = sorted(tests.rglob("test*.py")) if tests.is_dir() else []
+            for path in files:
+                tree = _parse_file(path)
+                if tree is not None and not _defines(tree, [name]):
+                    return f"{path.relative_to(folder).as_posix()}::{name}", "exists"
+            return name, "missing"
+    return "", "none"
+
+
 def evidence(
     root: pathlib.Path, project: str, where: str, evidence_cell: str = ""
 ) -> tuple[bool, str]:

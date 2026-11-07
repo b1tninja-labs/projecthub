@@ -121,17 +121,148 @@ def next_actions(project: str, limit: int = 10) -> list[dict[str, str]]:
         for row in rows_of(path.read_text(encoding="utf-8"))
         if STATUSES.get(row["status"], ("", "open"))[1] == "open"
     ]
-    return [
-        {
-            "row": row["name"],
-            "status": row["status"],
-            "spec": row["spec"],
-            "named_test": row["where"],
-            "milestone": row["milestone"] or "",
-            "evidence": row["evidence"],
-        }
-        for row in rows[:limit]
-    ]
+    out = []
+    for row in rows[:limit]:
+        node, state = roadmap.named_test(ROOT, project, row["where"], row["evidence"])
+        out.append(
+            {
+                "row": row["name"],
+                "status": row["status"],
+                "spec": row["spec"],
+                "where": row["where"],
+                "named_test": node,
+                "test_state": state,
+                "milestone": row["milestone"] or "",
+                "evidence": row["evidence"],
+            }
+        )
+    return out
+
+
+UNPLACED = 10_000
+
+
+def ready_rows(
+    active: set[str],
+    project: str = "",
+    limit: int = 10,
+    root: pathlib.Path | None = None,
+) -> dict[str, object]:
+    """Open rows an agent may start now, ranked, and how many were held back and why.
+
+    A row is ready when its project is owner-Active (the two-project rule), is a package rather than a plan
+    directory, and depends on nothing that is not yet code. Ranking: rows whose named test already exists
+    first, then milestone order on the project's own ladder, then how many projects wait on this one.
+
+    One deliberate departure from the research design: a row whose test is "(to be written)" stays ready
+    here, ranked after written ones, because leases (which would mark "this claim is for writing the test")
+    do not exist yet. Excluding them would leave almost no shell row ready.
+    """
+    import portfolio
+
+    base = root or ROOT
+    entries = portfolio.entries()
+    states = {e.name: portfolio.state(base, e) for e in entries}
+    waiting: dict[str, int] = {}
+    for e in entries:
+        for dep in e.depends:
+            waiting[dep] = waiting.get(dep, 0) + 1
+    skipped: dict[str, int] = {}
+    ready: list[tuple[tuple[int, int, int, str, int], dict[str, object]]] = []
+
+    def skip(reason: str, count: int) -> None:
+        if count:
+            skipped[reason] = skipped.get(reason, 0) + count
+
+    for entry in entries:
+        if project and entry.name != project:
+            continue
+        path = roadmap.matrix_path(base, entry.name)
+        if path is None:
+            continue
+        open_rows = [
+            r
+            for r in rows_of(path.read_text(encoding="utf-8"))
+            if STATUSES.get(r["status"], ("", "open"))[1] == "open"
+        ]
+        if entry.name not in active:
+            skip("project not Active", len(open_rows))
+            continue
+        folder = roadmap.project_dir(base, entry.name)
+        if entry.kind == "Plan" or not (folder / "pyproject.toml").is_file():
+            skip("plan directory: the deliverable is a document", len(open_rows))
+            continue
+        blockers = [
+            d
+            for d in entry.depends
+            if states.get(d) is None or states[d].label != "Implemented"
+        ]
+        if blockers:
+            skip(f"blocked by {', '.join(blockers)} (not yet code)", len(open_rows))
+            continue
+        order = list(roadmap.ladder_for(base, entry.name))
+        for row in open_rows:
+            node, test_state = roadmap.named_test(
+                base, entry.name, row["where"], row["evidence"]
+            )
+            rank_m = (
+                order.index(row["milestone"]) if row["milestone"] in order else UNPLACED
+            )
+            unblocks = waiting.get(entry.name, 0)
+            why = [f"{entry.name} is Active"]
+            why.append(
+                f"milestone {row['milestone']}"
+                if row["milestone"]
+                else "not on the ladder"
+            )
+            if unblocks:
+                why.append(f"{unblocks} project(s) wait on {entry.name}")
+            why.append(f"named test {test_state}")
+            key = (
+                0 if test_state == "exists" else 1,
+                rank_m,
+                -unblocks,
+                entry.name,
+                int(row.get("line") or 0),
+            )
+            ready.append(
+                (
+                    key,
+                    {
+                        "project": entry.name,
+                        "row_id": row["name"],
+                        "status": row["status"],
+                        "where": row["where"],
+                        "named_test": node,
+                        "test_state": test_state,
+                        "spec": row["spec"],
+                        "milestone": row["milestone"] or "",
+                        "unblocks": unblocks,
+                        "why": "; ".join(why),
+                    },
+                )
+            )
+    ready.sort(key=lambda pair: pair[0])
+    cap = max(1, limit)
+    return {
+        "active": sorted(active),
+        "ready": [r for _, r in ready[:cap]],
+        "ready_total": len(ready),
+        "truncated": len(ready) > cap,
+        "skipped": dict(sorted(skipped.items())),
+    }
+
+
+def active_projects(owner: str = ORG, number: int = 4) -> set[str]:
+    """Projects the owner marked Active on the board. Read, never inferred: Active is the owner's call."""
+    from ghprojects import Projects
+
+    return {
+        item.title.split(":", 1)[0].strip()
+        for item in Projects().items(owner, number)
+        if item.values.get("Level") == "Project"
+        and item.values.get("Active") == "Active"
+    }
 
 
 def context_for(project: str, needle: str, window: int = 14) -> str:
@@ -310,10 +441,12 @@ class StatusesOut(TypedDict):
     projects: list[StatusOut]
 
 
-class ActionsOut(TypedDict):
-    project: str
-    source: str
-    actions: list[dict[str, str]]
+class NextOut(TypedDict):
+    active: list[str]
+    ready: list[dict[str, object]]
+    ready_total: int
+    truncated: bool
+    skipped: dict[str, int]
 
 
 class ContextOut(TypedDict):
@@ -371,15 +504,28 @@ def build():
         }
 
     @app.tool(
-        description="Unmet obligations in one project, each with its spec, named test and milestone.",
+        description=(
+            "Rows an agent may start now: open rows in owner-Active projects that are packages and depend on "
+            "nothing unbuilt, ranked by named test written, milestone order, then projects unblocked. Says how "
+            "many rows were held back and why. `active` overrides the board's Active field."
+        ),
         annotations=read_only,
         structured_output=True,
     )
-    def forge_next_actions(project: str, limit: int = 10) -> ActionsOut:
-        found = next_actions(project, limit)
-        if found and "error" in found[0]:
-            raise ToolError(found[0]["error"])
-        return {"project": project, "source": f"{project}/ROADMAP.md", "actions": found}
+    def forge_next(
+        project: str = "", limit: int = 10, active: list[str] | None = None
+    ) -> NextOut:
+        try:
+            chosen = set(active) if active is not None else active_projects()
+        except (
+            Exception
+        ) as error:  # the board read failed: say so, never return an empty list
+            raise ToolError(f"could not read Active from board #4: {error}") from error
+        if not chosen:
+            raise ToolError(
+                "no project is marked Active on board #4; set Active on at most two projects, or pass active=[...]"
+            )
+        return ready_rows(chosen, project, limit)  # type: ignore[return-value]
 
     @app.tool(
         description="The prose around a row, where blocked notes and dead ends are recorded.",
