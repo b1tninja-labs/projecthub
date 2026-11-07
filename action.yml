@@ -21,14 +21,21 @@ inputs:
 runs:
   using: composite
   steps:
-    - run: pip install --quiet ruff mypy
+    - run: python -m pip install --quiet -r '${{ github.action_path }}/requirements-dev.txt'
       shell: bash
 
     - name: Roadmap rows must name real callables
       working-directory: ${{ github.workspace }}
-      run: python -m pytest -q tests/test_roadmap_rows.py
+      run: |
+        set -eu
+        if [ -f tests/test_roadmap_rows.py ]; then
+          python -m pytest -q tests/test_roadmap_rows.py
+        else
+          # Loud, not silent: a gate that skips reads as green, and a green gate nobody can
+          # distinguish from an absent one is not a gate.
+          echo "::warning::no tests/test_roadmap_rows.py in this project; matrix rows are unenforced"
+        fi
       shell: bash
-      if: ${{ hashFiles('tests/test_roadmap_rows.py') != '' }}
 
     - name: Roadmap and issues must agree
       env:
