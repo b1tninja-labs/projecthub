@@ -3,12 +3,17 @@
 Nothing here touches the network or a token. The board is invented cards, exactly as test_projects_mcp.py
 does it, and the two IO seams (a project's matrix rows, and deps.py) are stubbed. That is deliberate: the
 policy under test is which row is next, and a test that needed the live board would be testing GitHub.
+
+One seam is deliberately not stubbed: blockings() is also called against the real deps.py, because stubbing it
+everywhere is what let a wrong field name survive there. A stub cannot catch a misspelled attribute.
 """
 
 from __future__ import annotations
 
 import pathlib
+import types
 
+import deps
 import ghprojects as g
 import loop
 
@@ -58,6 +63,7 @@ def pick(
     rows: object = None,
     deps: object = no_deps,
     prefer: str = "",
+    runbook: object = None,
 ) -> dict:
     """Run the selector over invented cards, with the disk stubbed out."""
     original = loop.blockings
@@ -69,6 +75,7 @@ def pick(
             prefer=prefer,
             file_rows=rows or file_rows(("anchors.load_anchor()", "[ ]")),
             matrix_for=lambda name: pathlib.Path(f"{name}/ROADMAP.md"),
+            runbook=runbook,  # type: ignore[arg-type]
         )
     finally:
         loop.blockings = original  # type: ignore[assignment]
@@ -265,6 +272,31 @@ def test_the_live_card_shape_joins_to_the_live_row_id():
     assert got["caveats"] == []
 
 
+def test_a_row_id_with_parentheses_and_truncated_prose_still_joins():
+    """The live pkix shape, which the certledger shape above did not teach.
+
+    Titles arrive as "[pkix] anchors.load_anchor(): trust anchor selection, including name restrictions and
+    ...": the id carries parentheses, and the projector truncates the prose with an ellipsis. The first
+    version of the parser had no parentheses in its id class, so card_row() fell back to the raw title and the
+    emitted prompt named a whole sentence instead of a row. Running the selector against the live board caught
+    it; the fixtures could not, because they were written from a guess about the shape.
+    """
+    title = "[pkix] anchors.load_anchor(): trust anchor selection, including name restrictions and ..."
+    cards = [project("pkix", active=True), row(title, "Backlog", "pkix")]
+    # The file side is spelled the way planner.next_actions actually returns it - without the call marker -
+    # because that disagreement between the two sources is real, and surviving it is the join's job.
+    got = pick(cards, rows=file_rows(("anchors.load_anchor", "[ ]")))
+    assert got["row"] == "anchors.load_anchor()", (
+        "parentheses belong to an id on this board"
+    )
+    assert got["file_status"] == "[ ]"
+    assert got["named_test"] == "tests/test_x.py::t", (
+        "the join must carry the named test across"
+    )
+    assert got["caveats"] == [], "a call marker and a truncated title are not drift"
+    assert got["prompt"] == "/implement-obligation anchors.load_anchor()"
+
+
 def test_a_card_whose_title_and_url_disagree_about_the_project_says_so():
     cards = [
         project("pkix", active=True),
@@ -286,3 +318,92 @@ def test_repo_of_reads_the_card_url_and_says_so_when_there_is_none():
         loop.repo_of(g.Item("I", "DRAFT", "N", "https://github.com/x", "draft", {}))
         == ""
     )
+
+
+def test_a_project_with_no_runbook_is_withheld_even_when_it_is_active():
+    """A command whose own prompt cannot resolve is not the next step.
+
+    This was measured, not reasoned about: with asn1core and pkix both Active, the ranking chose asn1core,
+    the run started, and it died on "Unknown command or unquoted prompt" before touching a file, because the
+    runbook a slash command expands into ships with the generated shells and not with the phase-1 projects.
+    """
+    cards = [
+        project("asn1core", active=True),
+        project("pkix", active=True),
+        row("dk.corpus", "Backlog", "asn1core"),
+        row("chain.validate()", "Backlog", "pkix"),
+    ]
+    got = pick(
+        cards,
+        rows=file_rows(("dk.corpus", "[part]"), ("chain.validate()", "[ ]")),
+        runbook=lambda name: "" if name == "pkix" else "no runbook here",
+    )
+    assert got["project"] == "pkix", "the runnable project, not the merely earlier one"
+    assert got["skipped"][0]["project"] == "asn1core"
+    assert "no runbook" in got["skipped"][0]["why"], (
+        "the reason is printed, not swallowed"
+    )
+
+
+def test_the_step_carries_the_prompt_as_one_field_so_no_driver_parses_quotes():
+    cards = [project("pkix", active=True), row("chain.validate()", "Backlog", "pkix")]
+    got = pick(
+        cards,
+        rows=file_rows(("chain.validate()", "[ ]")),
+        runbook=lambda name: "",
+    )
+    assert got["prompt"] == "/implement-obligation chain.validate()"
+    assert got["prompt"] in got["command"]
+
+
+def test_runbook_gap_wants_the_file_not_just_the_directory(tmp_path):
+    workflows = tmp_path / "asn1core" / ".cline" / "workflows"
+    workflows.mkdir(parents=True)
+    assert loop.runbook_gap(tmp_path, "asn1core"), (
+        "an empty workflows directory runs nothing"
+    )
+    (workflows / "implement-obligation.md").write_text("# steps\n", encoding="utf-8")
+    assert loop.runbook_gap(tmp_path, "asn1core") == ""
+    assert "asn1kit" in loop.runbook_gap(tmp_path, "asn1kit")
+
+
+def test_blockings_reads_the_real_dependency_graph():
+    """The regression: blockings() once read `edge.name`, and deps.Edge has no such field.
+
+    Every other test stubs deps.py, and every project the selector had actually chosen (asn1core) has zero
+    edges, so the loop body never ran and the AttributeError stayed hidden. pkix is the first chosen project
+    with a dependency, and it has one: asn1core, whose state is real code. Had this test existed, the selector
+    would have crashed in front of a test instead of in front of a run.
+    """
+    hard, notes = loop.blockings(pathlib.Path("D:/code"), "pkix")
+    assert [
+        (e.project, e.dependency) for e in deps.edges(pathlib.Path("D:/code"), "pkix")
+    ] == [("pkix", "asn1core")], (
+        "this test is only worth anything if pkix still has an edge to walk"
+    )
+    assert hard == [], "asn1core is real code, so it must not withhold a pkix row"
+    assert notes == []
+
+
+def test_blockings_reports_a_dependency_that_is_only_a_shell(monkeypatch):
+    monkeypatch.setattr(
+        loop.deps, "edges", lambda root, name: [deps.Edge("pkix", "asn1core", False)]
+    )
+    monkeypatch.setattr(
+        loop.deps,
+        "dependency_state",
+        lambda root, name: types.SimpleNamespace(state="shell"),
+    )
+    _hard, notes = loop.blockings(pathlib.Path("D:/code"), "pkix")
+    assert notes == [
+        "hard dependency asn1core is a shell: it exists and does nothing yet"
+    ]
+
+    monkeypatch.setattr(
+        loop.deps,
+        "dependency_state",
+        lambda root, name: types.SimpleNamespace(state="plan only"),
+    )
+    hard, notes = loop.blockings(pathlib.Path("D:/code"), "pkix")
+    assert hard == ["asn1core"], "plan only is a hard block, per the workspace rule"
+    assert notes == ["hard dependency asn1core is plan only on disk"]

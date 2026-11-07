@@ -32,7 +32,7 @@ import os
 import pathlib
 import re
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
 
 import deps
 import planner
@@ -71,14 +71,34 @@ def project_of(card: Item) -> str:
 
 
 def plain(name: str) -> str:
-    """A row name as the board would title it: no backticks, no trailing marker."""
-    return name.replace("`", "").strip()
+    """A row name as both sides of the join write it: a key, never an identity to print.
+
+    The board titles a pkix card "[pkix] anchors.load_anchor(): ..." while planner.next_actions returns the
+    same obligation as "anchors.load_anchor", because it strips the call marker when it parses the matrix.
+    Joining on the raw strings reported a real row as drift and dropped the named test that belongs to it -
+    measured on the live board on 2026-11-07, where the row is `anchors.load_anchor()` at ROADMAP.md line 21
+    with `tests/test_obligations.py::load_anchor` beside it. Both sides come through here, so both lose the
+    backticks and the trailing (). Nothing a person reads is built from this: the row id that loop prints and
+    puts in the prompt keeps its call marker, because that is what the matrix file literally contains.
+    """
+    cleaned = name.replace("`", "").strip()
+    return cleaned[:-2] if cleaned.endswith("()") else cleaned
+
+
+def title_row(title: str) -> str:
+    """A card title read as a row id when it carries no `[project]` prefix, keeping the call marker."""
+    return title.replace("`", "").strip()
 
 
 # What sync_roadmap.py and board.py actually title an obligation card, read off the live board on
-# 2026-11-07: "[certledger] cl.multi-path: Model I7". The matrix calls the same row "cl.multi-path".
+# 2026-11-07: "[certledger] cl.multi-path: Model I7", and "[pkix] anchors.load_anchor(): trust anchor
+# selection, including name restrictions and ...". The matrix calls those rows "cl.multi-path" and
+# "anchors.load_anchor()". Two things the first shape did not teach: a row id carries parentheses, and the
+# prose after the colon is truncated with an ellipsis by the projector. Both came from running the selector
+# against the live board rather than against the fixtures, and the second is harmless because spec is a
+# fallback that the matrix cell outranks.
 CARD = re.compile(
-    r"^\[(?P<project>[^\]]+)\]\s+(?P<row>[\w.@/-]+)\s*(?::\s*(?P<spec>.*))?$"
+    r"^\[(?P<project>[^\]]+)\]\s+(?P<row>[\w.@/\[\]()+-]+)\s*(?::\s*(?P<spec>.*))?$"
 )
 
 
@@ -89,7 +109,7 @@ def card_row(card: Item) -> str:
     disagreement, because a wrong join here would send a run to a different row than the one a person marked.
     """
     match = CARD.match(card.title.strip())
-    return match.group("row") if match else plain(card.title)
+    return match.group("row") if match else title_row(card.title)
 
 
 def card_spec(card: Item) -> str:
@@ -141,7 +161,10 @@ def active_projects(cards: Sequence[Item]) -> list[str]:
 def open_decision_hits(cards: Sequence[Item], project: str) -> list[str]:
     """Open section 9 decisions naming this project, which is how board.py wires a block."""
     needle = project.lower()
-    return [d for d in views.overview(cards)["open_decisions"] if needle in d.lower()]
+    # overview() builds a payload for the MCP tool and is typed dict[str, object]; open_decisions is a list of
+    # strings there. The cast says that here rather than loosening a signature that another caller renders.
+    decisions = cast("list[str]", views.overview(cards)["open_decisions"])
+    return [d for d in decisions if needle in d.lower()]
 
 
 def blockings(root: pathlib.Path, project: str) -> tuple[list[str], list[str]]:
@@ -155,13 +178,13 @@ def blockings(root: pathlib.Path, project: str) -> tuple[list[str], list[str]]:
     hard: list[str] = []
     notes: list[str] = []
     for edge in deps.edges(root, project):
-        state = deps.dependency_state(root, edge.name).state
+        state = deps.dependency_state(root, edge.dependency).state
         if state in HARD_BLOCK:
-            hard.append(edge.name)
-            notes.append(f"hard dependency {edge.name} is {state} on disk")
+            hard.append(edge.dependency)
+            notes.append(f"hard dependency {edge.dependency} is {state} on disk")
         elif state in SOFT_BLOCK:
             notes.append(
-                f"hard dependency {edge.name} is a shell: it exists and does nothing yet"
+                f"hard dependency {edge.dependency} is a shell: it exists and does nothing yet"
             )
     return hard, notes
 
@@ -169,6 +192,26 @@ def blockings(root: pathlib.Path, project: str) -> tuple[list[str], list[str]]:
 def dependency_notes(root: pathlib.Path, project: str) -> list[str]:
     """The prose half of blockings(), for a caller that only reports."""
     return blockings(root, project)[1]
+
+
+RUNBOOK = ".cline/workflows/implement-obligation.md"
+
+
+def runbook_gap(root: pathlib.Path, project: str) -> str:
+    """Why this project cannot be run headless, or `""` when it can.
+
+    The command emitted here is a slash command, and a slash command only resolves against the project's own
+    `.cline/workflows`. Measured on 2026-11-07: all 29 generated shells carry `implement-obligation.md` and
+    none of the phase-1 projects do, so the selector chose `asn1core` and the run died on "Unknown command or
+    unquoted prompt" without reading a line of code. A row that no process can execute is not the next step,
+    and the reason belongs in the output next to the row that can be.
+    """
+    if (roadmap.project_dir(root, project) / RUNBOOK).is_file():
+        return ""
+    return (
+        f"{RUNBOOK} is absent from {project}, so /implement-obligation has nothing to expand: "
+        "port the runbook or run the row by hand"
+    )
 
 
 def command_for(row: str, cwd: pathlib.Path, *, timeout: int = 1800) -> str:
@@ -180,6 +223,10 @@ def command_for(row: str, cwd: pathlib.Path, *, timeout: int = 1800) -> str:
     workflow body stays short for the same reason. `--retries` and `--timeout` bound the damage, and `--json`
     leaves a run_result line carrying finishReason and usage, which is the only honest telemetry to log. Mode
     is act with auto-approve, stated rather than assumed, because the schedule subcommand defaults to yolo.
+
+    This string is quoted for a POSIX shell. Passing it through a second PowerShell layer eats the inner quotes
+    and the prompt arrives as two arguments, which is how a run failed on 2026-11-07; the step also carries
+    `prompt` as one field so a driver can hand it over as a single argument and never parse quotes.
     """
     return (
         f'cline -c "{cwd.as_posix()}" --worktree --auto-approve true '
@@ -195,6 +242,7 @@ def pick(
     *,
     file_rows: Callable[[str], list[dict[str, str]]] | None = None,
     matrix_for: Callable[[str], pathlib.Path] | None = None,
+    runbook: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     """The one step to take, or a stop reason. Pure over `cards`, so a test can invent a board.
 
@@ -240,6 +288,17 @@ def pick(
                 {"project": project, "row": card_row(card), "why": "; ".join(notes)}
             )
             continue
+        # A row inside a project with no runbook is not the next step, it is a command that will fail. The
+        # check is injected rather than always on so that pick() stays pure over cards for the tests, and
+        # main() never omits it: the failure it prevents was measured, not imagined.
+        if runbook is not None:
+            gap = runbook(project)
+            if gap:
+                notes.append(gap)
+                skipped.append(
+                    {"project": project, "row": card_row(card), "why": "; ".join(notes)}
+                )
+                continue
         if project not in active and len(active) >= views.ACTIVE_LIMIT:
             skipped.append(
                 {
@@ -278,7 +337,7 @@ def _step(
 ) -> dict[str, Any]:
     name = card_row(card)
     open_rows = {plain(r["row"]): r for r in rows_of_file(project)}
-    row = open_rows.get(name)
+    row = open_rows.get(plain(name))
     matrix = matrix_path(project)
     caveats = list(caveats)
     if row is None:
@@ -317,6 +376,7 @@ def _step(
         else "",
         "caveats": caveats,
         "skipped": skipped,
+        "prompt": f"/implement-obligation {name}",
         "command": command_for(name, cwd),
         "source": f"board {OWNER}#{BOARD} via projects_mcp views, and {project}/{matrix.name}",
     }
@@ -387,7 +447,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"error": str(error)}) if args.json else f"error: {error}")
         return 1
 
-    step = pick(ROOT, cards, prefer=args.project)
+    step = pick(
+        ROOT,
+        cards,
+        prefer=args.project,
+        runbook=lambda name: runbook_gap(ROOT, name),
+    )
     if args.json:
         print(json.dumps(step, indent=2, sort_keys=True))
     elif "stop" in step:
@@ -412,6 +477,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  needs     {step['needs']}")
         for note in step["caveats"]:
             print(f"  caveat    {note}")
+        # The rows that were passed over are printed alongside the one that was chosen. Withholding silently
+        # is how asn1core looked like the next step for a week while no process could run its row.
+        for row in step["skipped"][: args.limit]:
+            print(f"  withheld  {row['project']}/{row['row']}: {row['why']}")
         print(f"  source    {step['source']}")
         print()
         print(step["command"])
