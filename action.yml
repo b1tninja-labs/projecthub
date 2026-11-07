@@ -40,18 +40,17 @@ runs:
     - name: Roadmap and issues must agree
       env:
         GH_TOKEN: ${{ inputs.token }}
-        FORGE_ROOT: ${{ github.workspace }}/.
         FORGE_PROJECT: ${{ inputs.project }}
         # The action runs from its own checkout under _actions, not from the project.
         FORGE_SCRIPT: ${{ github.action_path }}/sync_roadmap.py
       run: |
         set -eu
         project="${FORGE_PROJECT:-$(basename "$GITHUB_WORKSPACE")}"
-        # FORGE_ROOT holds <project>/ROADMAP.md, so point it at the parent of the checkout when the
-        # checkout is not itself named after the project.
-        if [ ! -f "$FORGE_ROOT/$project/ROADMAP.md" ]; then
-          FORGE_ROOT="$(dirname "$GITHUB_WORKSPACE")"
-        fi
-        python "$FORGE_SCRIPT" --check --project "$project" --root "$FORGE_ROOT" \
+        # --root expects <root>/<project>/ROADMAP.md. The runner's layout is a convention, not a
+        # contract, so the shape is built rather than inferred from the checkout path.
+        root=$(mktemp -d)
+        mkdir -p "$root/$project"
+        cp ROADMAP.md "$root/$project/"
+        python "$FORGE_SCRIPT" --check --project "$project" --root "$root" \
           --org "${GITHUB_REPOSITORY_OWNER}"
       shell: bash
