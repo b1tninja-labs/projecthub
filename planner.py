@@ -21,10 +21,10 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-import re
 import subprocess
 import sys
 
+import rowdoc
 from sync_roadmap import MARKER, PROJECTS, STATUSES, gh, rows_of
 
 # Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
@@ -37,7 +37,9 @@ OPENISH = ("open",)
 
 
 def _gh_json(argv: list[str]) -> object:
-    done = subprocess.run([gh(), *argv], capture_output=True, text=True, check=False)  # noqa: S603
+    done = subprocess.run(
+        [gh(), *argv], capture_output=True, text=True, encoding="utf-8", check=False
+    )  # noqa: S603
     if done.returncode != 0:
         return {"error": done.stderr.strip()[:200]}
     try:
@@ -131,26 +133,15 @@ def context_for(project: str, needle: str, window: int = 14) -> str:
     return f"no mention of {needle!r} in {project}/ROADMAP.md"
 
 
-TEST_REF = re.compile(r"([\w./\\-]+\.py)::(\w+)")
-
-
 def test_evidence(project: str, where: str) -> tuple[bool, str]:
     """Does the row's named test actually exist and define the named symbol?
 
-    This is a floor, not the rule. The portfolio's rule is that a row flips only when the test would
-    fail if the behaviour regressed, and only CI running that test can show that. What this refuses is
-    the cheaper and more common lie: a row marked done pointing at a file or a symbol nobody wrote.
+    One implementation, shared with the issue text (rowdoc.py): two copies of this check would drift, and
+    this is the one the done-row guard rests on. It is a floor, not the rule: the portfolio's rule is that
+    a row flips only when the test would fail if the behaviour regressed, and only CI running that test
+    can show that.
     """
-    found = TEST_REF.search(where)
-    if not found:
-        return False, f"the Where cell names no file::symbol: {where!r}"
-    relative, symbol = found.group(1), found.group(2)
-    path = ROOT / project / relative
-    if not path.is_file():
-        return False, f"{relative} does not exist in {project}"
-    if f"def {symbol}" not in path.read_text(encoding="utf-8"):
-        return False, f"{relative} defines no {symbol}"
-    return True, f"{relative} defines {symbol}"
+    return rowdoc.test_evidence(ROOT, project, where)
 
 
 def rewrite_row(text: str, project: str, name: str, new_status: str) -> tuple[str, str]:
@@ -198,6 +189,30 @@ def propose_status(project: str, name: str, new_status: str, write: bool) -> str
     return f"{project}/ROADMAP.md: {name} -> {new_status}. Commit it with the code and the named test."
 
 
+def _gh_edit_assignee(repo: str, number: str, flag: str, who: str) -> str:
+    """Add or remove one assignee. Returns the failure text, or "" on success."""
+    done = subprocess.run(  # noqa: S603
+        [gh(), "issue", "edit", number, "--repo", repo, flag, who],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    return "" if done.returncode == 0 else done.stderr.strip()[:200]
+
+
+def _assignees(repo: str, number: str) -> list[str] | str:
+    """The issue's current assignees, sorted, or an error string. Read fresh, never from the earlier list."""
+    view = _gh_json(["issue", "view", number, "--repo", repo, "--json", "assignees"])
+    if not isinstance(view, dict) or "assignees" not in view:
+        return (
+            str(view.get("error", "unreadable"))
+            if isinstance(view, dict)
+            else "unreadable"
+        )
+    return sorted(str(a["login"]) for a in view["assignees"] if a.get("login"))
+
+
 def claim(project: str, name: str, who: str) -> str:
     """Assign the row's issue to `who`, refusing if someone else already holds it."""
     repo = f"{ORG}/{project}"
@@ -222,27 +237,32 @@ def claim(project: str, name: str, who: str) -> str:
     )
     if target is None:
         return f"no open issue carries {MARKER.format(name)}; run sync_roadmap --apply first"
-    holders = [a.get("login") for a in target.get("assignees", []) if a.get("login")]
-    if holders and who not in holders:
-        return f"REFUSED: {project}#{target['number']} is already claimed by {', '.join(holders)}"
-    done = subprocess.run(  # noqa: S603
-        [
-            gh(),
-            "issue",
-            "edit",
-            str(target["number"]),
-            "--repo",
-            repo,
-            "--add-assignee",
-            who,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    number = str(target["number"])
+    holders = sorted(
+        str(a["login"]) for a in target.get("assignees", []) if a.get("login")
     )
-    if done.returncode != 0:
-        return f"could not claim: {done.stderr.strip()[:200]}"
-    return f"claimed {target['url']} for {who}"
+    if holders == [who]:
+        return f"{target['url']} is already yours"
+    if holders:
+        return f"REFUSED: {project}#{number} is already claimed by {', '.join(holders)}"
+    failure = _gh_edit_assignee(repo, number, "--add-assignee", who)
+    if failure:
+        return f"could not claim: {failure}"
+    # The list above and the edit are two requests, so two agents can both pass the check and both be
+    # added. GitHub offers no compare-and-swap on assignees, so the claim is only real once a re-read shows
+    # the caller as the sole assignee. A contender that sees anyone else backs off, which means two
+    # simultaneous claims may both fail: that is the safe outcome, and a retry resolves it.
+    after = _assignees(repo, number)
+    if isinstance(after, str):
+        return f"UNCONFIRMED: assigned {who} but could not re-read the issue ({after}); check before working"
+    if after == [who]:
+        return f"claimed {target['url']} for {who}"
+    _gh_edit_assignee(repo, number, "--remove-assignee", who)
+    others = [login for login in after if login != who]
+    return (
+        f"REFUSED: {project}#{number} was contended by {', '.join(others) or 'someone'}; "
+        f"{who} backed off. Retry in a moment"
+    )
 
 
 INSTRUCTIONS = (
@@ -285,7 +305,7 @@ def build():
         return context_for(project, row)
 
     @app.tool(
-        description="Assign the row's issue to a login. Refuses if someone else holds it."
+        description="Assign the row's issue to a login and confirm by re-reading. Refuses if anyone else holds it."
     )
     def forge_claim(project: str, row: str, who: str) -> str:
         return claim(project, row, who)

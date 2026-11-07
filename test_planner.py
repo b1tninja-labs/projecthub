@@ -94,3 +94,65 @@ def test_mcp_surface_exposes_exactly_five_tools():
     names = sorted(t.name for t in getattr(listed, "tools", listed))
     assert len(names) == 5, names
     assert all(n.startswith("forge_") for n in names), names
+
+
+class FakeIssues:
+    """The two reads claim() makes, and the edits it issues. `after` is what the re-read returns."""
+
+    def __init__(self, monkeypatch, before, after):
+        self.edits: list[tuple[str, str]] = []
+        issue = {
+            "number": 4,
+            "url": "https://x/4",
+            "body": "<!-- roadmap:a.b -->",
+            "assignees": [{"login": n} for n in before],
+        }
+
+        def fake_json(argv):
+            if argv[:2] == ["issue", "list"]:
+                return [issue]
+            return {"assignees": [{"login": n} for n in after]}
+
+        def fake_edit(repo, number, flag, who):
+            self.edits.append((flag, who))
+            return ""
+
+        monkeypatch.setattr(p, "_gh_json", fake_json)
+        monkeypatch.setattr(p, "_gh_edit_assignee", fake_edit)
+
+
+def test_claim_succeeds_only_when_the_reread_shows_the_caller_alone(monkeypatch):
+    issues = FakeIssues(monkeypatch, before=[], after=["me"])
+    assert p.claim("pkix", "a.b", "me").startswith("claimed")
+    assert issues.edits == [("--add-assignee", "me")]
+
+
+def test_claim_backs_off_when_a_contender_was_added_at_the_same_time(monkeypatch):
+    issues = FakeIssues(monkeypatch, before=[], after=["me", "rival"])
+    outcome = p.claim("pkix", "a.b", "me")
+    assert outcome.startswith("REFUSED") and "rival" in outcome
+    assert issues.edits == [("--add-assignee", "me"), ("--remove-assignee", "me")]
+
+
+def test_claim_refuses_without_writing_when_someone_already_holds_it(monkeypatch):
+    issues = FakeIssues(monkeypatch, before=["rival"], after=["rival"])
+    assert p.claim("pkix", "a.b", "me").startswith("REFUSED")
+    assert issues.edits == []
+
+
+def test_claim_by_the_current_holder_is_idempotent(monkeypatch):
+    issues = FakeIssues(monkeypatch, before=["me"], after=["me"])
+    assert "already yours" in p.claim("pkix", "a.b", "me")
+    assert issues.edits == []
+
+
+def test_claim_is_unconfirmed_when_the_reread_fails(monkeypatch):
+    issues = FakeIssues(monkeypatch, before=[], after=[])
+    real = p._gh_json
+    monkeypatch.setattr(
+        p,
+        "_gh_json",
+        lambda argv: real(argv) if argv[:2] == ["issue", "list"] else {"error": "boom"},
+    )
+    assert p.claim("pkix", "a.b", "me").startswith("UNCONFIRMED")
+    assert issues.edits == [("--add-assignee", "me")]
