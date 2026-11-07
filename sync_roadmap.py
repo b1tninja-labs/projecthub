@@ -19,6 +19,7 @@ Usage:
     py sync_roadmap.py                              # every qualifying project, plan only
     py sync_roadmap.py --project pkix --apply
     py sync_roadmap.py --check
+    py sync_roadmap.py --apply --board          # and put the issues on a Project V2 board
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ import tempfile
 from verify import PROJECTS
 
 MARKER = "<!-- roadmap:{} -->"
+DEFAULT_BOARD = "Protocol SDK portfolio"
 MILESTONE_RE = re.compile(r"\bM\d+\b")
 STATUSES = {
     "[ok]": ("status:done", "close"),
@@ -319,6 +321,115 @@ def sync_one(name: str, repo: str, apply: bool, check: bool) -> int:
     return 0
 
 
+def graphql(query: str) -> str:
+    """One GraphQL call through gh, so the token in the keyring is the only credential involved."""
+    out = subprocess.run(  # noqa: S603
+        [gh(), "api", "graphql", "-f", f"query={query}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if out.returncode != 0:
+        print(f"    board: {out.stderr.strip()[:200]}", file=sys.stderr)
+        return ""
+    return out.stdout
+
+
+def board_urls(owner: str, number: int) -> set[str]:
+    """Issue URLs already on the board, in one call."""
+    query = (
+        f'query {{ user(login: "{owner}") {{ projectV2(number: {number}) {{ items(first: 200) {{ nodes '
+        f"{{ content {{ ... on Issue {{ url }} }} }} }} }} }} }}"
+    )
+    text = graphql(query)
+    if not text:
+        return set()
+    nodes = json.loads(text)["data"]["user"]["projectV2"]["items"]["nodes"]
+    return {str(n["content"]["url"]) for n in nodes if n.get("content")}
+
+
+def sync_board(
+    owner: str, title: str, want: list[tuple[str, str]], apply: bool
+) -> None:
+    """Create the board if absent, then add every issue not already on it.
+
+    `want` is (url, node id) per issue. The additions go out as one aliased mutation rather than one
+    request per issue: twenty-two sequential calls took long enough to trip a command timeout, and an
+    interrupted loop is a half-populated board.
+    """
+    if not apply:
+        print(
+            f"board: with --apply, create {title!r} if absent and add up to {len(want)} issue(s)"
+        )
+        return
+    listing = graphql(
+        f'query {{ user(login: "{owner}") {{ projectV2s(first: 100) {{ nodes {{ id number title }} }} }} }}'
+    )
+    if not listing:
+        return
+    projects = json.loads(listing)["data"]["user"]["projectV2s"]["nodes"]
+    project = next((p for p in projects if p["title"] == title), None)
+    if project is None:
+        out = run(
+            [
+                "gh",
+                "project",
+                "create",
+                "--owner",
+                owner,
+                "--title",
+                title,
+                "--format",
+                "json",
+            ],
+            apply,
+        )
+        try:
+            project = json.loads(out)
+        except json.JSONDecodeError:
+            print(
+                "board: created nothing usable; could not parse the response",
+                file=sys.stderr,
+            )
+            return
+        print(f"board: created {title} #{project['number']}")
+    have = board_urls(owner, project["number"])
+    missing = [(url, node) for url, node in want if url not in have]
+    if not missing:
+        print(
+            f"board: {title} #{project['number']} already carries all {len(want)} issue(s)"
+        )
+        return
+    parts = " ".join(
+        f'add{index}: addProjectV2ItemById(input: {{ projectId: "{project["id"]}", contentId: "{node}" }}) '
+        f"{{ item {{ id }} }}"
+        for index, (_, node) in enumerate(missing)
+    )
+    graphql(f"mutation {{ {parts} }}")
+    print(f"board: added {len(missing)} issue(s) to {title} #{project['number']}")
+
+
+def issue_refs(repo: str) -> list[tuple[str, str]]:
+    """(url, node id) for a repo's open issues. The node id is what a board item needs."""
+    argv = [
+        gh(),
+        "issue",
+        "list",
+        "--repo",
+        repo,
+        "--state",
+        "open",
+        "--limit",
+        "200",
+        "--json",
+        "url,id",
+    ]
+    out = subprocess.run(argv, capture_output=True, text=True, check=False)  # noqa: S603
+    if out.returncode != 0:
+        return []
+    return [(str(i["url"]), str(i["id"])) for i in json.loads(out.stdout or "[]")]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -337,11 +448,25 @@ def main() -> int:
     parser.add_argument(
         "--check", action="store_true", help="CI mode: report drift, write nothing"
     )
+    parser.add_argument(
+        "--board",
+        nargs="?",
+        const=DEFAULT_BOARD,
+        default=None,
+        metavar="TITLE",
+        help="add these projects' open issues to a Project V2 board of this title",
+    )
     args = parser.parse_args()
 
     total = 0
+    refs: list[tuple[str, str]] = []
     for name in args.project or PROJECTS:
-        total += sync_one(name, f"{args.org}/{name}", args.apply, args.check)
+        repo = f"{args.org}/{name}"
+        total += sync_one(name, repo, args.apply, args.check)
+        if args.board and not args.check:
+            refs += issue_refs(repo)
+    if args.board:
+        sync_board(args.org, args.board, refs, args.apply)
     if args.check:
         print("in sync" if not total else f"{total} drift item(s)")
         return 1 if total else 0
