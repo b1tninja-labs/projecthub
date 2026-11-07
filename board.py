@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import portfolio
+import roadmap
 import rowdoc
 from ghprojects import Change, GhProjectsError, Item, Project, Projects
 from sync_roadmap import STATUSES, gh, rows_of
@@ -525,6 +526,28 @@ class GhIssues:
     def __init__(self, limit: int = ISSUE_LIMIT) -> None:
         self.limit = limit
 
+    def milestones(self, repo: str) -> set[str]:
+        """Titles of every milestone in the repository, open or closed."""
+        done = subprocess.run(  # noqa: S603
+            [
+                gh(),
+                "api",
+                f"repos/{repo}/milestones?state=all",
+                "--paginate",
+                "--jq",
+                ".[].title",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        if done.returncode != 0:
+            raise GhProjectsError(
+                f"could not list milestones in {repo}: {done.stderr.strip()[:200]}"
+            )
+        return {line for line in done.stdout.splitlines() if line}
+
     def read(self, repo: str) -> list[Issue]:
         done = subprocess.run(  # noqa: S603
             [
@@ -622,6 +645,7 @@ class Board:
         self.client, self.owner, self.number, self.apply = client, owner, number, apply
         self.store: Issues = issues if issues is not None else GhIssues()
         self._issues: dict[str, list[Issue]] = {}
+        self._milestones: dict[str, set[str]] = {}
         self.drift: list[tuple[str, str]] = []
         self.failures: list[str] = []
 
@@ -642,6 +666,19 @@ class Board:
         self.failures.append(what)
 
     # issues -------------------------------------------------------------------------------------------
+
+    def milestone(self, repo: str, title: str) -> str:
+        """`title` if the repository has that milestone, else "". The sync creates milestones only for rows
+        it files, so a ladder entry whose rows are all done (certledger phase 0) has none, and asking GitHub
+        to file an epic under it stops the run."""
+        if not title:
+            return ""
+        lister = getattr(self.store, "milestones", None)
+        if lister is None:
+            return title  # a store that cannot list milestones (a test fake) is trusted
+        if repo not in self._milestones:
+            self._milestones[repo] = lister(repo)
+        return title if title in self._milestones[repo] else ""
 
     def issues(self, repo: str, refresh: bool = False) -> list[Issue]:
         if refresh or repo not in self._issues:
@@ -1032,8 +1069,13 @@ def build(board: Board, only: set[str] | None) -> None:
         parent = project_issues.get(entry.name)
         if not (in_scope(entry.name) and state.repo and rows and row_issues and parent):
             continue
-        ladder = rowdoc.ladder_of(
-            (ROOT / entry.directory / state.matrix).read_text(encoding="utf-8")
+        # The same ladder the sync reads, so an epic never names a milestone the sync did not create (a
+        # certledger "phase 0" epic once asked GitHub for a milestone that did not exist and stopped the run).
+        text = (ROOT / entry.directory / state.matrix).read_text(encoding="utf-8")
+        ladder = (
+            roadmap.ladder_for(ROOT, entry.name)
+            if entry.name in roadmap.LADDERS
+            else roadmap.ladder_of(text, "M")
         )
         numbers = {k: v.number for k, v in row_issues.items()}
         for row in rows:
@@ -1063,7 +1105,10 @@ def build(board: Board, only: set[str] | None) -> None:
                 EPIC_MARKER.format(key),
                 epic_title(entry.name, key, ladder),
                 epic_body(entry.name, state.repo, key, ladder, in_milestone, numbers),
-                rowdoc.milestone_title(key, ladder),
+                board.milestone(
+                    state.repo,
+                    rowdoc.milestone_title(key, ladder) if key in ladder else "",
+                ),
             )
             if epic is None:
                 continue

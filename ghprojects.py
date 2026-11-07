@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
@@ -41,6 +42,17 @@ FIELD_BATCH = 20
 READ_SCOPES = ("read:project", "project")
 WRITE_SCOPES = ("project",)
 FIX_COMMAND = "gh auth refresh -s project"
+
+
+# Failures worth retrying: the request never got a real answer.
+TRANSIENT = (
+    "HTTP 502",
+    "HTTP 503",
+    "HTTP 504",
+    "TLS handshake timeout",
+    "connection reset",
+    "i/o timeout",
+)
 
 
 class GhProjectsError(Exception):
@@ -237,9 +249,13 @@ class Projects:
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         body = json.dumps({"query": query, "variables": variables or {}})
         done = self._run(["api", "graphql", "--input", "-"], body)
-        if done.code != 0 and "HTTP 502" in done.err:
-            # GitHub answers a heavy request with a bare 502 now and then (seen on 2026-11-07 on item reads and
-            # batched writes). One retry; a second 502 is reported, not looped on.
+        for pause in (2, 8):
+            if done.code == 0 or not any(t in done.err for t in TRANSIENT):
+                break
+            # GitHub answers a heavy request with a bare 502 now and then, and the network drops a TLS
+            # handshake (both seen on 2026-11-07, the second ending a 300-item board run). Two spaced
+            # retries; a third failure is reported, not looped on.
+            time.sleep(pause)
             done = self._run(["api", "graphql", "--input", "-"], body)
         try:
             payload = json.loads(done.out or "null")
