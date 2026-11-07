@@ -574,7 +574,7 @@ def packet(
             ),
             "gates": (
                 f"cd {folder.as_posix()} && python -m pytest -q && python -m ruff check . && "
-                f"python -m ruff format --check . && python -m mypy {package}"
+                f"python -m ruff format --check . && python -m mypy {package} tests"
             ),
             "done_when": (
                 f"the {row['title']} row reads [ok] in {rel} in the same commit as the code and the named test, "
