@@ -1,6 +1,26 @@
 # A GitHub Projects interface for the forge
 
-Status: design, not built. Nothing here has been run against the live Projects API (see section 1).
+Status: built, and registered with the Cline CLI. Corrected 2026-11-07 by the change that added `loop.py`. The
+sections below keep the original reasoning and the measured API facts, which are still what the design rests on;
+two claims in them are now false, and both were checked rather than assumed.
+
+- **The scope blocker in section 1 is gone.** `gh auth status` on this machine now reports `gist`, `project`,
+  `read:org`, `repo`, `workflow`, and `gh project list --owner b1tninja` returns board #4.
+  `ghprojects.MissingScope` still names `gh auth refresh -s project`, which remains the right answer for a
+  machine that has not been refreshed.
+- **`projects_mcp.py` exists and runs.** Verified over stdio with a real MCP client on 2026-11-07: server
+  `gh-projects`, protocol `2025-11-25`, six tools (`projects_auth`, `projects_list`, `project_schema`,
+  `project_items`, `item_context`, `portfolio_overview`), and `portfolio_overview` answered
+  "0 of 2 active slots used" from the live board. It is registered in
+  `~/.cline/data/settings/cline_mcp_settings.json` with all six reads auto-approved - safe only because there
+  is no write tool (decision D23), so a future write tool must not join that list by reflex.
+
+What the read side is for: `sdk-forge/loop.py` composes these same views to name the one obligation that can be
+started next, and nothing else. It decides no more than the board has been told. `board.py` leaves every row at
+Backlog and states that it never moves Status forward, so a row outside an Active project needs a person to mark
+it Ready, and Active itself stays a person's field. That limit is deliberate: the portfolio's failure mode is
+prose outrunning code, and a selector that could promote its own third project would be prose with a cron
+behind it. As of 2026-11-07 the portfolio has 51 of 384 obligation rows done, across 4 projects of 35.
 
 ## 1. Blocker: the token has no project scope
 
