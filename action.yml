@@ -1,0 +1,50 @@
+name: roadmap gate
+description: >-
+  Check a project's ROADMAP.md against the callables its rows name, and against the GitHub issues
+  derived from it. Read-only: this action never creates, comments, closes or pushes.
+
+# Consumed as `uses: b1tninja/sdk-forge@main`. The consuming workflow is expected to have already
+# checked its own project out; FORGE_ROOT is pointed at the parent of that checkout so the project
+# name resolves to a directory. Rows and issues are matched on a marker in each issue body, so a
+# re-run is a no-op rather than a duplicate.
+
+inputs:
+  project:
+    description: Project name. Defaults to the repository name.
+    required: false
+    default: ""
+  token:
+    description: Token used to read this repository's issues.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - run: pip install --quiet ruff mypy
+      shell: bash
+
+    - name: Roadmap rows must name real callables
+      working-directory: ${{ github.workspace }}
+      run: python -m pytest -q tests/test_roadmap_rows.py
+      shell: bash
+      if: ${{ hashFiles('tests/test_roadmap_rows.py') != '' }}
+
+    - name: Roadmap and issues must agree
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        FORGE_ROOT: ${{ github.workspace }}/.
+        FORGE_PROJECT: ${{ inputs.project }}
+        # The action runs from its own checkout under _actions, not from the project.
+        FORGE_SCRIPT: ${{ github.action_path }}/sync_roadmap.py
+      run: |
+        set -eu
+        project="${FORGE_PROJECT:-$(basename "$GITHUB_WORKSPACE")}"
+        # FORGE_ROOT holds <project>/ROADMAP.md, so point it at the parent of the checkout when the
+        # checkout is not itself named after the project.
+        if [ ! -f "$FORGE_ROOT/$project/ROADMAP.md" ]; then
+          FORGE_ROOT="$(dirname "$GITHUB_WORKSPACE")"
+        fi
+        python "$FORGE_SCRIPT" --check --project "$project" --root "$FORGE_ROOT" \
+          --org "${GITHUB_REPOSITORY_OWNER}"
+      shell: bash

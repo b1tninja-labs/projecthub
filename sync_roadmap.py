@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -245,9 +246,9 @@ def body(row: dict[str, str], milestone: str) -> str:
     return "\n".join(lines)
 
 
-def sync_one(name: str, repo: str, apply: bool, check: bool) -> int:
+def sync_one(name: str, repo: str, apply: bool, check: bool, root: pathlib.Path) -> int:
     """One project: file what is missing, close what is done, and report drift."""
-    path = pathlib.Path("D:/code") / name / "ROADMAP.md"
+    path = root / name / "ROADMAP.md"
     if not path.is_file():
         print(f"{name}: no ROADMAP.md, skipped")
         return 0
@@ -456,13 +457,19 @@ def main() -> int:
         metavar="TITLE",
         help="add these projects' open issues to a Project V2 board of this title",
     )
+    parser.add_argument(
+        "--root",
+        default=os.environ.get("FORGE_ROOT", "D:/code"),
+        help="directory the project checkouts live in (FORGE_ROOT in CI)",
+    )
     args = parser.parse_args()
 
+    root = pathlib.Path(args.root)
     total = 0
     refs: list[tuple[str, str]] = []
     for name in args.project or PROJECTS:
         repo = f"{args.org}/{name}"
-        total += sync_one(name, repo, args.apply, args.check)
+        total += sync_one(name, repo, args.apply, args.check, root)
         if args.board and not args.check:
             refs += issue_refs(repo)
     if args.board:
