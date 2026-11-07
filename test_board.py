@@ -147,12 +147,29 @@ def test_changes_are_idempotent_including_numbers():
     assert b.changes_for(project_fields(), items, wanted) == []
 
 
-def test_row_values_strip_backticks_and_mark_done_rows():
-    row = {"name": "a.b", "spec": "RFC 1", "where": "`t.py::x`", "status": "[ok]"}
-    values = b.row_values(row, 2, 2)
+def test_row_values_take_the_node_id_and_mark_done_rows():
+    row = {
+        "name": "a.b",
+        "spec": "RFC 1",
+        "where": "`t.py::x` — plus two sentences of evidence nobody asked the board to hold",
+        "status": "[ok]",
+    }
+    values = b.row_values(row, 2, 2, "t.py::x")
     assert values["Named test"] == "t.py::x" and values["Status"] == "Done"
     assert values["Priority"] == "P1" and values["Wave"] == "Wave 2"
     assert b.row_values(row, 0, 0)["Wave"] == ""
+
+
+def test_row_values_never_put_the_evidence_cell_in_a_board_field():
+    # The defect this guards: Named test was built from the Where cell, so a row whose evidence is a paragraph
+    # wrote a paragraph into a Projects text column. GitHub refused every one of them ("Column value must be a
+    # valid value for text column"), --apply reported the failures, and --check then demanded the same six
+    # writes forever because they could never land. A row that names no test names nothing on the board.
+    long_where = "tools/verify_provenance.py — " + "measured detail, " * 200
+    row = {"name": "ta.x", "spec": "PLAN.md §chain", "where": long_where, "status": "[part]"}
+    values = b.row_values(row, 2, 2, "")
+    assert values["Named test"] == ""
+    assert values["Status"] == "Backlog"
 
 
 # -- a whole build against fakes ------------------------------------------------------------------------

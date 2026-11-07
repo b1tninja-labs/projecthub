@@ -877,12 +877,22 @@ def active_items(items: Iterable[Item]) -> list[str]:
     ]
 
 
-def row_values(row: dict[str, str], tier: int, wave: int) -> dict[str, object]:
+def row_values(
+    row: dict[str, str], tier: int, wave: int, node: str = ""
+) -> dict[str, object]:
+    """The board fields one obligation row owns.
+
+    `node` is a pytest node id computed by the caller through `roadmap.named_test`, never the Where cell. The
+    first version wrote `row["where"]` here, which put a whole evidence paragraph into a Projects text column:
+    GitHub rejected every one of trustatlas's long rows with "Column value must be a valid value for text
+    column", so `--apply` failed its writes and `--check` reported the same six differences forever. A board
+    field is a pointer to evidence, not a copy of it.
+    """
     done = STATUSES.get(row["status"], ("", "open"))[1] == "close"
     return {
         "Level": "Obligation",
         "Spec": row["spec"],
-        "Named test": row["where"].strip("`"),
+        "Named test": node,
         "Priority": priority(tier),
         "Wave": f"Wave {wave}" if wave else "",
         "Status": "Done" if done else "Backlog",
@@ -1083,7 +1093,14 @@ def build(board: Board, only: set[str] | None) -> None:
             if issue is None:
                 continue
             if issue.state == "OPEN" or row_done(row):
-                wanted[issue.node_id] = row_values(row, entry.tier, entry.wave)
+                wanted[issue.node_id] = row_values(
+                    row,
+                    entry.tier,
+                    entry.wave,
+                    roadmap.named_test(
+                        ROOT, entry.name, row["where"], row.get("evidence", "")
+                    )[0],
+                )
             if issue.state != "OPEN" and not row_done(row):
                 board.note(
                     BOARD_AHEAD,
