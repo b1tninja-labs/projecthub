@@ -155,3 +155,29 @@ def test_the_server_refuses_a_row_that_is_not_ready_and_never_claims_read_only(s
         )
     listed = anyio.run(app.call_tool, "forge_leases", {}).structured_content
     assert [x["row_key"] for x in listed["live"]] == ["pkix:a.b"]
+
+
+def test_the_command_line_finishes_a_claim_without_mcp(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "leases.sqlite"
+    monkeypatch.setenv("FORGE_LEASES_DB", str(path))
+    lease = L.Store(path).acquire("pkix", "a.b", "agent-1")
+    assert L.main(["heartbeat", lease.lease_id]) == 0
+    assert "renewed until" in capsys.readouterr().out
+    assert L.main(["block", lease.lease_id, "spec_question", "which", "clause"]) == 0
+    assert "spec_question" not in capsys.readouterr().err
+    other = L.Store(path).acquire("pkix", "c.d", "agent-1")
+    assert L.main(["release", other.lease_id, "pr_opened"]) == 1
+    assert "PR_URL_REQUIRED" in capsys.readouterr().err
+    assert L.main(["release", other.lease_id, "handoff", "--note", "half done"]) == 0
+    assert L.Store(path).live_keys() - {"pkix:a.b"} == set()
+
+
+def test_a_row_is_blocked_until_a_later_claim_on_it(store):
+    s, clock = store
+    lease = s.acquire("pkix", "a.b")
+    s.block(lease.lease_id, "spec_question", "which clause")
+    assert s.blocked_keys() == {"pkix:a.b"}
+    clock.t += 1
+    again = s.acquire("pkix", "a.b")
+    s.release(again.lease_id, "handoff")
+    assert s.blocked_keys() == set()

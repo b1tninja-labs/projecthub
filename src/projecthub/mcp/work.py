@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from projecthub import paths
 
+import argparse
 import json
 import os
 import pathlib
@@ -324,6 +325,15 @@ class Store:
     def live_keys(self) -> set[str]:
         return {lease.row_key for lease in self.live()}
 
+    def blocked_keys(self) -> set[str]:
+        """Rows whose latest claim ended blocked: they wait for a person, not for the next arrival."""
+        with self._write() as db:
+            found = db.execute(
+                "SELECT row_key FROM leases AS l WHERE state='blocked' AND acquired_at="
+                "(SELECT MAX(acquired_at) FROM leases WHERE row_key=l.row_key)"
+            ).fetchall()
+        return {row["row_key"] for row in found}
+
     def held(self, key: str) -> Lease | None:
         return next((lease for lease in self.live() if lease.row_key == key), None)
 
@@ -544,8 +554,45 @@ def main(argv: list[str]) -> int:
     if argv[0] == "steal" and len(argv) >= 2:
         print(store.steal(argv[1], " ".join(argv[2:]) or "stolen by a person"))
         return 0
-    print("usage: leases.py [list | steal <lease_id> [reason]]", file=sys.stderr)
+    if argv[0] in ("release", "block", "heartbeat") and len(argv) >= 2:
+        return _finish(store, argv)
+    print(
+        "usage: leases.py [list | steal <lease_id> [reason] | heartbeat <lease_id>\n"
+        "                 | release <lease_id> <outcome> [--note TEXT] [--pr-url URL]\n"
+        "                 | block <lease_id> <kind> <detail>]",
+        file=sys.stderr,
+    )
     return 2
+
+
+def _finish(store: Store, argv: list[str]) -> int:
+    """The same calls the work MCP server offers, for an agent whose client has no MCP."""
+    command, lease_id, *rest = argv
+    try:
+        if command == "heartbeat":
+            print(f"renewed until {_iso(store.heartbeat(lease_id))}")
+        elif command == "release":
+            parser = argparse.ArgumentParser(prog="leases.py release")
+            parser.add_argument("outcome")
+            parser.add_argument("--note", default="")
+            parser.add_argument("--pr-url", default="")
+            args = parser.parse_args(rest)
+            print(
+                store.release(
+                    lease_id, args.outcome, note=args.note, pr_url=args.pr_url
+                )
+            )
+        else:
+            if len(rest) < 2:
+                print(
+                    "usage: leases.py block <lease_id> <kind> <detail>", file=sys.stderr
+                )
+                return 2
+            print(json.dumps(store.block(lease_id, rest[0], " ".join(rest[1:]))))
+    except LeaseError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

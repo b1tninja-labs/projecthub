@@ -656,7 +656,8 @@ def _fit(out: dict[str, object]) -> dict[str, object]:
 
 
 INSTRUCTIONS = (
-    "Portfolio planning for the protocol SDK workspace. Read tools return the file or command an answer "
+    "If you arrive without a task, run `projecthub pickup`: its output is your assignment and it holds your claim. "
+    "Work only that row. Portfolio planning for the protocol SDK workspace. Read tools return the file or command an answer "
     "came from. ROADMAP.md is authoritative and issues are derived from it, so a row is the plan and the "
     "named test is the proof. Never mark a row done because the code looks right: this tool refuses when "
     "the named test does not exist, and CI is still the only thing that can show the test would fail if "

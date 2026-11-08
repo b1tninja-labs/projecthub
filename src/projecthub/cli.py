@@ -15,6 +15,10 @@ COMMANDS = {
     "sync": ("projecthub.github.sync", "project obligations onto GitHub issues"),
     "board": ("projecthub.github.board", "build and check the GitHub Project"),
     "deps": ("projecthub.deps", "dependency state from disk"),
+    "pickup": (
+        "projecthub.mcp.loop",
+        "claim the next row and print it as your assignment",
+    ),
     "next": ("projecthub.mcp.loop", "name the next startable obligation"),
     "leases": (
         "projecthub.mcp.work",
@@ -45,7 +49,8 @@ def main() -> int:
             print(f"  {name:<13} {what}")
         return 0 if argv[:1] in ([], ["-h"], ["--help"]) else 2
     module = importlib.import_module(COMMANDS[argv[0]][0])
-    sys.argv = [f"projecthub {argv[0]}", *argv[1:]]
+    rest = ["pickup", *argv[1:]] if argv[0] == "pickup" else argv[1:]
+    sys.argv = [f"projecthub {argv[0]}", *rest]
     result = (
         module.main(sys.argv[1:])
         if module.__name__ == "projecthub.mcp.work"

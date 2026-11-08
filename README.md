@@ -12,5 +12,12 @@ projecthub --help
 python -m pytest -q
 ```
 
+## For agents
+
+Run `projecthub pickup --who <your name>`. Its output is your assignment: one row, already claimed for you, with
+the commands that prove it and the ways to end it. `NO WORK` is a real answer: ask the person what to work on.
+Until the portfolio's issues reach the organization Project, the live command is `python sdk-forge/loop.py pickup`
+in the `D:\code` workspace, and `projecthub pickup` reports `NO WORK`.
+
 Status: early. The design and the decisions behind it are recorded in the portfolio's PORTFOLIO.md, section 9,
 items 10 and 11.

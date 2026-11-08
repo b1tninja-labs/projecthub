@@ -31,7 +31,8 @@ import json
 import os
 import pathlib
 import re
-from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
+from collections.abc import Callable, Collection, Sequence
 from typing import Any, cast
 
 from projecthub import deps
@@ -243,6 +244,7 @@ def pick(
     file_rows: Callable[[str], list[dict[str, str]]] | None = None,
     matrix_for: Callable[[str], pathlib.Path] | None = None,
     runbook: Callable[[str], str] | None = None,
+    leased: Collection[str] = (),
 ) -> dict[str, Any]:
     """The one step to take, or a stop reason. Pure over `cards`, so a test can invent a board.
 
@@ -276,6 +278,15 @@ def pick(
     skipped: list[dict[str, str]] = []
     for card in candidates:
         project = project_of(card)
+        if claim_key(project, card_row(card)) in leased:
+            skipped.append(
+                {
+                    "project": project,
+                    "row": card_row(card),
+                    "why": "another agent holds the claim on this row",
+                }
+            )
+            continue
         hard, notes = blockings(root, project)
         decisions = open_decision_hits(cards, project)
         # A project is blocked by any open section 9 decision that names it, which is how board.py wires the
@@ -422,15 +433,183 @@ def _stop(
     }
 
 
+# ------------------------------------------------------------------------------------------ pickup
+
+LEASE_COMMAND = "projecthub leases"
+NO_WORK_EXIT = 3
+PICK_ATTEMPTS = 25
+
+
+def claim_key(project: str, row: str) -> str:
+    """The lease key for a board row: `project:row`, with the backticks and call parentheses taken off."""
+    return f"{project}:{row.strip('`').removesuffix('()')}"
+
+
+def _no_work(reason: str, skipped: Sequence[dict[str, str]] = ()) -> str:
+    """Its own state, because a model with nothing to do invents a task."""
+    lines = [
+        f"NO WORK: {reason}",
+        "",
+        "Ask the person what to work on. The board decides the order of work.",
+    ]
+    lines += [
+        f"  withheld {row['project']}/{row['row']}: {row['why']}"
+        for row in skipped[:10]
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _bullets(title: str, items: Sequence[str]) -> list[str]:
+    return [f"## {title}", "", *[f"- {item}" for item in items], ""] if items else []
+
+
+def assignment(step: dict[str, Any], packet: dict[str, Any], lease: Any) -> str:
+    """The one-item contract: everything needed for this row, and the one way to end it."""
+    stub = packet.get("stub") or {}
+    acceptance = packet.get("acceptance") or {}
+    expires = datetime.fromtimestamp(lease.expires_at, UTC).isoformat(
+        timespec="minutes"
+    )
+    finish = f"{LEASE_COMMAND} {{}} {lease.lease_id}"
+    lines = [
+        f"# Your assignment: {packet['row_id']}",
+        "",
+        f"You hold the claim on this row until {expires}. The board chose it, so work only this row.",
+        "",
+        f"- Work in: {step['cwd']} (read its AGENTS.md first)",
+        f"- Status: {packet.get('status') or step.get('board_status')}",
+        f"- Where: {packet.get('where') or '-'}",
+    ]
+    if stub:
+        lines.append(f"- Implements: {stub.get('path')}: {stub.get('signature')}")
+    lines += [
+        f"- Named test: {packet.get('named_test') or '-'} ({packet.get('test_state')})",
+        f"- Spec: {packet.get('spec') or '-'}. {packet.get('spec_note') or ''}",
+    ]
+    if packet.get("milestone"):
+        lines.append(
+            f"- Milestone: {packet['milestone']} {packet.get('milestone_text') or ''}".rstrip()
+        )
+    lines.append("")
+    lines += _bullets(
+        "Finished means",
+        [acceptance[k] for k in ("done_when", "test", "gates") if acceptance.get(k)],
+    )
+    lines += _bullets(
+        "Depends on",
+        [f"{d['project']}: {d['state']}" for d in packet.get("depends_on") or []],
+    )
+    lines += _bullets(
+        "Open decisions naming this project", list(packet.get("open_decisions") or [])
+    )
+    lines += _bullets("Notes on this row", list(packet.get("notes") or []))
+    lines += _bullets("Caveats", list(step.get("caveats") or []))
+    lines += [
+        "## End this work with one of these",
+        "",
+        "```",
+        f"{finish.format('release')} pr_opened --pr-url URL",
+        f'{finish.format("release")} handoff --note "what is done, what is next, what to watch for"',
+        f'{finish.format("release")} abandoned --note "why"',
+        f'{finish.format("block")} dependency|spec_question|decision_needed|env "what you need"',
+        "```",
+        "",
+        f"If the work runs long, renew the claim: `{finish.format('heartbeat')}`.",
+        "If a decision belongs to the person, block with decision_needed, name the options, and stop.",
+        "Say done, fixed or tested only when a tool's output shows it.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def run_pickup(
+    root: pathlib.Path,
+    cards: Sequence[Item],
+    *,
+    store: Any,
+    make_packet: Callable[[str], dict[str, Any]],
+    prefer: str = "",
+    who: str = "agent",
+    file_rows: Callable[[str], list[dict[str, str]]] | None = None,
+    matrix_for: Callable[[str], pathlib.Path] | None = None,
+) -> tuple[int, str]:
+    """Pick one row, claim it and return the assignment, or a distinct NO WORK state with its reason.
+
+    The runbook check is left out on purpose: it guards a Cline slash command, and this output runs in any client.
+    A row that cannot produce a packet is passed over, so one stale card cannot stop every arrival.
+    """
+    from projecthub.mcp import work as lease_store
+
+    excluded = set(store.live_keys()) | set(store.blocked_keys())
+    for _ in range(PICK_ATTEMPTS):
+        step = pick(
+            root,
+            cards,
+            prefer=prefer,
+            file_rows=file_rows,
+            matrix_for=matrix_for,
+            leased=excluded,
+        )
+        if "command" not in step:
+            return NO_WORK_EXIT, _no_work(str(step["stop"]), step.get("skipped") or [])
+        if step["needs"]:
+            return NO_WORK_EXIT, _no_work(
+                f"{step['project']}/{step['row']}: {step['needs']}", step["skipped"]
+            )
+        key = claim_key(step["project"], step["row"])
+        try:
+            packet = make_packet(key)
+        except LookupError:
+            excluded.add(key)
+            continue
+        project, _, row_id = key.partition(":")
+        try:
+            lease = store.acquire(project, row_id, who)
+        except lease_store.LeaseError as error:
+            if error.code != "LEASE_HELD":
+                raise
+            excluded.add(key)
+            continue
+        return 0, assignment(step, packet, lease)
+    return NO_WORK_EXIT, _no_work(
+        f"no row could be claimed in {PICK_ATTEMPTS} attempts"
+    )
+
+
+def pickup_main(args: argparse.Namespace, cards: Sequence[Item]) -> int:
+    from projecthub.mcp import work as lease_store
+
+    store = lease_store.Store()
+    code, text = run_pickup(
+        ROOT,
+        cards,
+        store=store,
+        make_packet=lambda key: planner.packet(key, leases=None),
+        prefer=args.project,
+        who=args.who,
+    )
+    print(text, end="")
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text, encoding="utf-8")
+    return code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="loop.py",
         description="Name the next obligation the portfolio can start, and the command that runs it.",
     )
-    parser.add_argument("action", nargs="?", default="next", choices=("next",))
+    parser.add_argument("action", nargs="?", default="next", choices=("next", "pickup"))
     parser.add_argument("--project", default="", help="consider only this project")
     parser.add_argument(
         "--json", action="store_true", help="machine-readable step for a driver"
+    )
+    parser.add_argument("--who", default="agent", help="pickup: who holds the claim")
+    parser.add_argument(
+        "--out",
+        type=pathlib.Path,
+        help="pickup: also write the assignment to this file",
     )
     parser.add_argument("--owner", default=OWNER, help="Projects board owner")
     parser.add_argument(
@@ -446,6 +625,9 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as error:  # noqa: BLE001 - ghprojects raises typed errors that already name the fix
         print(json.dumps({"error": str(error)}) if args.json else f"error: {error}")
         return 1
+
+    if args.action == "pickup":
+        return pickup_main(args, cards)
 
     step = pick(
         ROOT,

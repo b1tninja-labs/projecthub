@@ -410,3 +410,126 @@ def test_blockings_reports_a_dependency_that_is_only_a_shell(monkeypatch):
     hard, notes = loop.blockings(pathlib.Path("D:/code"), "pkix")
     assert hard == ["asn1core"], "plan only is a hard block, per the workspace rule"
     assert notes == ["hard dependency asn1core is plan only on disk"]
+
+
+class Claims:
+    """A lease store in memory: the first claim on a key wins."""
+
+    def __init__(
+        self, held: tuple[str, ...] = (), blocked: tuple[str, ...] = ()
+    ) -> None:
+        self.held = set(held)
+        self.blocked = set(blocked)
+
+    def live_keys(self) -> set[str]:
+        return set(self.held)
+
+    def blocked_keys(self) -> set[str]:
+        return set(self.blocked)
+
+    def acquire(self, project: str, row: str, who: str) -> types.SimpleNamespace:
+        self.held.add(f"{project}:{row}")
+        return types.SimpleNamespace(lease_id="L1", expires_at=1_800_000_000.0, who=who)
+
+
+PACKET = {
+    "row_id": "pkix:anchors.load_anchor",
+    "status": "[ ]",
+    "where": "`tests/test_a.py::t`",
+    "stub": {"path": "pkix/anchors.py", "signature": "load_anchor(der)"},
+    "named_test": "tests/test_a.py::t",
+    "test_state": "to be written",
+    "spec": "RFC 5280 section 6.1",
+    "spec_note": "Read the clause with rfclib.",
+    "acceptance": {"done_when": "the row reads [ok]", "gates": "python -m pytest -q"},
+    "depends_on": [{"project": "asn1core", "state": "Implemented"}],
+    "open_decisions": [],
+    "notes": ["a note"],
+}
+
+
+def pickup(
+    cards: list[g.Item], store: Claims, packet: object = None, deps: object = no_deps
+) -> tuple[int, str]:
+    original = loop.blockings
+    loop.blockings = deps  # type: ignore[assignment]
+    try:
+        return loop.run_pickup(
+            pathlib.Path("D:/code"),
+            cards,
+            store=store,
+            make_packet=packet or (lambda key: PACKET),  # type: ignore[arg-type]
+            file_rows=file_rows(
+                ("anchors.load_anchor()", "[ ]"), ("chain.build()", "[ ]")
+            ),  # type: ignore[arg-type]
+            matrix_for=lambda name: pathlib.Path(f"{name}/ROADMAP.md"),
+        )
+    finally:
+        loop.blockings = original  # type: ignore[assignment]
+
+
+BOARD_CARDS = [
+    project("pkix", active=True),
+    row("anchors.load_anchor()", "Ready", "pkix"),
+    row("chain.build()", "Backlog", "pkix"),
+]
+
+
+def test_pickup_claims_one_row_and_its_output_is_the_assignment():
+    store = Claims()
+    code, text = pickup(BOARD_CARDS, store)
+    assert code == 0
+    assert store.held == {"pkix:anchors.load_anchor"}, (
+        "the script claims it, so the agent has no choice to make"
+    )
+    assert text.startswith("# Your assignment: pkix:anchors.load_anchor")
+    assert "work only this row" in text and "L1" in text
+    assert "Say done, fixed or tested only when a tool's output shows it." in text
+    assert "pr_opened" in text and "decision_needed" in text
+
+
+def test_two_arrivals_never_get_the_same_row():
+    store = Claims()
+    first = pickup(BOARD_CARDS, store)[1]
+    second = pickup(BOARD_CARDS, store)
+    assert "anchors.load_anchor" in first
+    assert second[0] == 0 and store.held == {
+        "pkix:anchors.load_anchor",
+        "pkix:chain.build",
+    }
+
+
+def test_no_work_is_a_distinct_state_that_says_ask():
+    store = Claims(("pkix:anchors.load_anchor", "pkix:chain.build"))
+    code, text = pickup(BOARD_CARDS, store)
+    assert code == loop.NO_WORK_EXIT and text.startswith("NO WORK: ")
+    assert "Ask the person what to work on" in text
+    assert "another agent holds the claim" in text
+
+
+def test_a_row_outside_the_active_projects_needs_a_person_and_is_not_claimed():
+    store = Claims()
+    code, text = pickup(
+        [project("pkix", active=True), row("compliance.set()", "Ready", "ctspy")], store
+    )
+    assert code == loop.NO_WORK_EXIT and "a person sets Active" in text
+    assert store.held == set()
+
+
+def test_a_row_with_no_packet_is_passed_over():
+    def packet(key: str) -> dict[str, object]:
+        if "anchors" in key:
+            raise LookupError("stale card")
+        return {**PACKET, "row_id": key}
+
+    store = Claims()
+    code, text = pickup(BOARD_CARDS, store, packet=packet)
+    assert code == 0 and "pkix:chain.build" in text
+    assert store.held == {"pkix:chain.build"}
+
+
+def test_a_blocked_row_waits_for_a_person():
+    store = Claims(blocked=("pkix:anchors.load_anchor",))
+    code, text = pickup(BOARD_CARDS, store)
+    assert code == 0 and "pkix:chain.build" not in store.blocked
+    assert store.held == {"pkix:chain.build"}
