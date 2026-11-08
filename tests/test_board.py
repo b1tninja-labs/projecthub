@@ -230,7 +230,9 @@ def full_schema() -> g.Project:
         fields[name] = g.Field(name, name, "NUMBER")
     for name in b.TEXT_FIELDS:
         fields[name] = g.Field(name, name, "TEXT")
-    return g.Project("PRJ", 4, "Protocol SDK portfolio", False, fields=fields)
+    return g.Project(
+        "PRJ", b.BOARD_NUMBER, "Protocol SDK portfolio", False, fields=fields
+    )
 
 
 class FakeClient:
@@ -240,7 +242,9 @@ class FakeClient:
         self.cards: dict[str, g.Item] = {}
         self.links: dict[str, dict[str, set[str]]] = {"subIssues": {}, "blockedBy": {}}
         self.writes: list[tuple[str, ...]] = []
-        self.projects = [g.Project("PRJ", 4, "Protocol SDK portfolio", False)]
+        self.projects = [
+            g.Project("PRJ", b.BOARD_NUMBER, "Protocol SDK portfolio", False)
+        ]
         self.fail_links = False
 
     def guard(self, needed: int) -> None:
@@ -250,7 +254,7 @@ class FakeClient:
         return self.projects
 
     def project(self, owner: str, number: int) -> g.Project:
-        assert number == 4, "only board #4 exists"
+        assert number == b.BOARD_NUMBER, "only the configured board exists"
         return full_schema()
 
     def readme(self, project_id: str) -> tuple[str, str]:
@@ -370,7 +374,11 @@ class World:
     def run(self, *argv: str) -> int:
         self.issues.writes.clear()
         self.client.writes.clear()
-        return b.main(["--number", "4", *argv], client=self.client, issues=self.issues)
+        return b.main(
+            ["--number", str(b.BOARD_NUMBER), *argv],
+            client=self.client,
+            issues=self.issues,
+        )
 
     def card(self, name: str) -> b.Issue:
         marker = b.MARK.format("project", name)
