@@ -21,7 +21,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - run: python -m pip install --quiet -r '${{ github.action_path }}/requirements-dev.txt'
+    - run: python -m pip install --quiet '${{ github.action_path }}[dev]'
       shell: bash
 
     - name: Roadmap rows must name real callables
@@ -41,8 +41,6 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
         FORGE_PROJECT: ${{ inputs.project }}
-        # The action runs from its own checkout under _actions, not from the project.
-        FORGE_SCRIPT: ${{ github.action_path }}/sync_roadmap.py
       run: |
         set -eu
         project="${FORGE_PROJECT:-$(basename "$GITHUB_WORKSPACE")}"
@@ -51,6 +49,6 @@ runs:
         root=$(mktemp -d)
         mkdir -p "$root/$project"
         cp ROADMAP.md "$root/$project/"
-        python "$FORGE_SCRIPT" --check --project "$project" --root "$root" \
+        planforge sync --check --project "$project" --root "$root" \
           --org "${GITHUB_REPOSITORY_OWNER}"
       shell: bash

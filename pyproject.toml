@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "planforge"
+dynamic = ["version"]
+description = "A local planning database for coding agents: typed entries, checked citations, evidence-gated done, mirrored to GitHub Projects"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Justin Capella" }]
+dependencies = ["coverage>=7.6"]
+
+[project.optional-dependencies]
+mcp = ["mcp>=2.3,<3"]
+dev = ["ruff==0.15.12", "mypy==1.20.2", "pytest==9.0.3", "mcp==2.3.0", "coverage==7.17.0", "anyio"]
+
+[project.scripts]
+planforge = "planforge.cli:main"
+
+[project.urls]
+Repository = "https://github.com/b1tninja-labs/forge"
+
+[tool.hatch.version]
+path = "src/planforge/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/planforge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+explicit_package_bases = true
+warn_unused_ignores = false
+ignore_missing_imports = true

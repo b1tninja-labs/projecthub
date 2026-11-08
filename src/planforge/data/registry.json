@@ -1,0 +1,217 @@
+{
+  "_note": "The project registry, seeded from sdk-forge's verify.PROJECTS and forge_data/position.py. planforge owns it now; sdk-forge reads it from here.",
+  "projects": [
+    "certledger",
+    "rpkit",
+    "rtrkit",
+    "asnkit",
+    "h3tunnel",
+    "dnssd-srp",
+    "turnkit",
+    "leasespy",
+    "cwmp",
+    "devicespy",
+    "ohttp",
+    "ntspy",
+    "tacacs",
+    "signeddata",
+    "pgpenv",
+    "syslogkit",
+    "sfields",
+    "shaken",
+    "srtpkit",
+    "pkix",
+    "revokekit",
+    "enrollkit",
+    "ctspy",
+    "pathattr",
+    "bmpkit",
+    "rpslkit",
+    "bgpfeed",
+    "routevalid",
+    "lgc",
+    "miblang"
+  ],
+  "position": {
+    "rpkit": [
+      1,
+      1,
+      [
+        "asn1core"
+      ]
+    ],
+    "ctspy": [
+      2,
+      2,
+      [
+        "asn1core"
+      ]
+    ],
+    "pkix": [
+      2,
+      2,
+      [
+        "asn1core"
+      ]
+    ],
+    "revokekit": [
+      2,
+      2,
+      [
+        "asn1core",
+        "pkix"
+      ]
+    ],
+    "rtrkit": [
+      2,
+      2,
+      [
+        "rpkit"
+      ]
+    ],
+    "routevalid": [
+      2,
+      2,
+      [
+        "rpkit",
+        "rtrkit"
+      ]
+    ],
+    "dnssd-srp": [
+      2,
+      4,
+      [
+        "namespy"
+      ]
+    ],
+    "leasespy": [
+      2,
+      4,
+      []
+    ],
+    "asnkit": [
+      3,
+      3,
+      [
+        "rpkit",
+        "rtrkit"
+      ]
+    ],
+    "bgpfeed": [
+      3,
+      3,
+      [
+        "asnkit"
+      ]
+    ],
+    "rpslkit": [
+      3,
+      3,
+      []
+    ],
+    "bmpkit": [
+      3,
+      3,
+      []
+    ],
+    "pathattr": [
+      3,
+      3,
+      []
+    ],
+    "lgc": [
+      3,
+      3,
+      []
+    ],
+    "turnkit": [
+      3,
+      3,
+      []
+    ],
+    "ohttp": [
+      3,
+      3,
+      []
+    ],
+    "h3tunnel": [
+      3,
+      3,
+      []
+    ],
+    "sfields": [
+      3,
+      3,
+      []
+    ],
+    "syslogkit": [
+      3,
+      3,
+      []
+    ],
+    "signeddata": [
+      3,
+      2,
+      [
+        "asn1core"
+      ]
+    ],
+    "ntspy": [
+      4,
+      5,
+      []
+    ],
+    "tacacs": [
+      4,
+      5,
+      []
+    ],
+    "pgpenv": [
+      4,
+      5,
+      [
+        "asn1core"
+      ]
+    ],
+    "enrollkit": [
+      4,
+      5,
+      [
+        "asn1core",
+        "pkix"
+      ]
+    ],
+    "shaken": [
+      4,
+      5,
+      [
+        "asn1core"
+      ]
+    ],
+    "srtpkit": [
+      4,
+      5,
+      [
+        "asn1core"
+      ]
+    ],
+    "cwmp": [
+      4,
+      5,
+      []
+    ],
+    "devicespy": [
+      4,
+      5,
+      []
+    ],
+    "miblang": [
+      4,
+      5,
+      [
+        "asn1core",
+        "itulib"
+      ]
+    ]
+  }
+}
