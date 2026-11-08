@@ -1,14 +1,11 @@
 {
   "name": "projecthub-b1tninja-labs",
   "url": "https://github.com/b1tninja-labs/projecthub",
-  "description": "Mirrors the local projecthub planning database to GitHub Issues and an organization Project.",
+  "description": "Mirrors the local projecthub planning database to the portfolio repository's issues and the organization Project.",
   "public": false,
   "default_permissions": {
     "issues": "write",
     "metadata": "read",
-    "contents": "read",
-    "pull_requests": "read",
-    "checks": "read",
     "organization_projects": "write"
   },
   "default_events": []

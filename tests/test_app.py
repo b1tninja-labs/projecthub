@@ -34,20 +34,16 @@ class Fake:
 
 
 def test_the_shipped_manifest_grants_what_the_sync_needs_and_no_webhook():
-    manifest = A.build_manifest(False, "http://localhost:1/callback")
+    manifest = A.build_manifest("http://localhost:1/callback")
     assert manifest["public"] is False and manifest["redirect_url"].endswith(
         "/callback"
     )
     assert manifest["default_permissions"] == {
         "issues": "write",
         "metadata": "read",
-        "contents": "read",
-        "pull_requests": "read",
-        "checks": "read",
         "organization_projects": "write",
-    }
+    }, "evidence runs locally, so the App needs nothing from the code repositories"
     assert manifest["default_events"] == [] and "hook_attributes" not in manifest
-    assert A.build_manifest(True, "x")["public"] is True
 
 
 def test_the_form_escapes_the_manifest_and_carries_the_state():
@@ -142,10 +138,3 @@ def test_elsewhere_the_local_store_reports_why_not():
 )
 def test_the_credential_structure_matches_windows():
     assert ctypes.sizeof(A._Credential) == 80, "CREDENTIALW on x64"
-
-
-def test_which_accounts_may_install_is_a_required_choice(capsys):
-    with pytest.raises(SystemExit) as caught:
-        A.main(["create"])
-    assert caught.value.code == 2
-    assert "--any-account" in capsys.readouterr().err

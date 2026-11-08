@@ -9,8 +9,8 @@ import os
 
 PROJECT_OWNER = os.environ.get("PROJECTHUB_OWNER") or "b1tninja-labs"
 PROJECT_NUMBER = int(os.environ.get("PROJECTHUB_NUMBER") or 1)
-# Wave epics and portfolio-level decisions have no project repository of their own (PORTFOLIO.md decision 11).
+# Every entry's issue lives in this one public repository, with a project field: 35 repos are too many to check.
 PORTFOLIO_REPO = (
-    os.environ.get("PROJECTHUB_PORTFOLIO_REPO") or f"{PROJECT_OWNER}/projecthub"
+    os.environ.get("PROJECTHUB_PORTFOLIO_REPO") or f"{PROJECT_OWNER}/portfolio"
 )
 BOARD_URL = f"https://github.com/orgs/{PROJECT_OWNER}/projects/{PROJECT_NUMBER}"

@@ -14,8 +14,7 @@ around that one click is automated by `projecthub app create`, run once by the o
 The private key is never printed, logged or written to a file. If a storing step fails, the command says which;
 the recovery is to generate a new key on the App's settings page, because the conversion cannot be repeated.
 
-    projecthub app create --org-only                # installable only on the organization
-    projecthub app create --any-account             # also installable on a personal account
+    projecthub app create
 """
 
 from __future__ import annotations
@@ -68,9 +67,8 @@ def gh(argv: list[str], stdin: str | None = None) -> Done:
     return Done(done.returncode, done.stdout, done.stderr)
 
 
-def build_manifest(public: bool, redirect_url: str) -> dict[str, Any]:
+def build_manifest(redirect_url: str) -> dict[str, Any]:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    manifest["public"] = public
     manifest["redirect_url"] = redirect_url
     return manifest
 
@@ -286,7 +284,7 @@ def create(args: argparse.Namespace) -> int:
     def make_page(port: int) -> str:
         return form_page(
             registration_url(args.org, state),
-            build_manifest(args.any_account, f"{base(port)}/callback"),
+            build_manifest(f"{base(port)}/callback"),
         )
 
     def on_ready(port: int) -> None:
@@ -330,16 +328,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--repo",
         default=config.PORTFOLIO_REPO,
         help="where setup-project.yml's secret goes",
-    )
-    # Required on purpose: which accounts can install the App is the owner's choice, not a default.
-    who = make.add_mutually_exclusive_group(required=True)
-    who.add_argument(
-        "--any-account",
-        action="store_true",
-        help="also installable on a personal account",
-    )
-    who.add_argument(
-        "--org-only", action="store_true", help="installable only on the organization"
     )
     make.add_argument(
         "--no-browser",
