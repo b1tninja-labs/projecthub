@@ -27,6 +27,8 @@ D:/code/sdk-forge/projects_mcp.py)
 
 from __future__ import annotations
 
+from projecthub import config
+
 import os
 import sys
 from collections import Counter
@@ -35,8 +37,8 @@ from typing import Any, TypedDict
 
 from projecthub.github.client import GhProjectsError, Item, Projects
 
-DEFAULT_OWNER = os.environ.get("PROJECTS_MCP_OWNER", "b1tninja")
-DEFAULT_NUMBER = int(os.environ.get("PROJECTS_MCP_NUMBER", "4"))
+DEFAULT_OWNER = os.environ.get("PROJECTS_MCP_OWNER", config.PROJECT_OWNER)
+DEFAULT_NUMBER = int(os.environ.get("PROJECTS_MCP_NUMBER") or config.PROJECT_NUMBER)
 ACTIVE_LIMIT = (
     2  # PORTFOLIO.md section 7: at most two projects carry real effort at once
 )

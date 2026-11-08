@@ -35,6 +35,8 @@ Usage:
 
 from __future__ import annotations
 
+from projecthub import config
+
 import argparse
 import datetime
 import json
@@ -55,10 +57,10 @@ from projecthub.github.client import Change, GhProjectsError, Item, Project, Pro
 from projecthub.github.sync import STATUSES, gh, rows_of
 
 ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
-OWNER = "b1tninja"
-PORTFOLIO_REPO = f"{OWNER}/sdk-forge"
-# D6: Project #4 is the only board. Configured here and in FORGE_BOARD, never looked up by title.
-BOARD_NUMBER = int(os.environ.get("FORGE_BOARD") or 4)
+OWNER = config.PROJECT_OWNER
+PORTFOLIO_REPO = config.PORTFOLIO_REPO
+# There is one board. Configured in config.py and FORGE_BOARD, never looked up by title.
+BOARD_NUMBER = int(os.environ.get("FORGE_BOARD") or config.PROJECT_NUMBER)
 ISSUE_LIMIT = 1000
 
 STATUS = [

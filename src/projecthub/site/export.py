@@ -19,6 +19,8 @@ Exit 2 when --out is inside the workspace or a git work tree, as verify.py --jso
 
 from __future__ import annotations
 
+from projecthub import config
+
 from projecthub import paths
 
 import argparse
@@ -37,7 +39,7 @@ OWNER = "b1tninja"
 # some stay personal on purpose (PyPI trusted publishing). Both owners are listed; where a name exists under
 # both, the organization's copy wins, because GitHub redirects the old URL to it.
 OWNERS = ("b1tninja", "b1tninja-labs")
-BOARD_URL = f"https://github.com/users/{OWNER}/projects/4"
+BOARD_URL = config.BOARD_URL
 CURATION = HERE.parent / "data" / "public_repos.json"
 SCHEMA_VERSION = 1
 

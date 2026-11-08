@@ -235,6 +235,7 @@ class Projects:
     def __init__(self, run: Runner = gh_runner) -> None:
         self._run = run
         self._scopes: tuple[str, ...] | None | bool = False  # False: not asked yet
+        self._rest_roots: dict[str, str] = {}
 
     # -- transport ---------------------------------------------------------------------------------
 
@@ -670,11 +671,27 @@ class Projects:
             names += [n["name"] for n in connection["nodes"]]
         return names
 
+    def _rest_root(self, owner: str) -> str:
+        """`orgs/x` or `users/x`: the REST Projects paths differ by owner type, unlike GraphQL's repositoryOwner."""
+        if owner not in self._rest_roots:
+            done = self._run(["api", f"users/{owner}", "--jq", ".type"], None)
+            kind = (
+                "orgs"
+                if done.code == 0 and done.out.strip() == "Organization"
+                else "users"
+            )
+            self._rest_roots[owner] = f"{kind}/{owner}"
+        return self._rest_roots[owner]
+
     def rest_field_ids(self, owner: str, number: int) -> dict[str, int]:
         """Field name -> the numeric id the REST views endpoint wants (GraphQL node ids are not accepted)."""
         self.require()
         done = self._run(
-            ["api", f"users/{owner}/projectsV2/{number}/fields?per_page=100"], None
+            [
+                "api",
+                f"{self._rest_root(owner)}/projectsV2/{number}/fields?per_page=100",
+            ],
+            None,
         )
         try:
             listed = json.loads(done.out or "null")
@@ -698,7 +715,7 @@ class Projects:
                 "api",
                 "-X",
                 "POST",
-                f"users/{owner}/projectsV2/{number}/views",
+                f"{self._rest_root(owner)}/projectsV2/{number}/views",
                 "-H",
                 "X-GitHub-Api-Version: 2026-03-10",
                 "--input",

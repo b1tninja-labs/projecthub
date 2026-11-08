@@ -526,4 +526,6 @@ def test_the_board_is_chosen_by_number_and_defaults_to_the_configured_one(
     world.run("--apply")
     world.client.writes.clear()
     assert b.main(["--check"], client=world.client, issues=world.issues) == 0
-    assert b.BOARD_NUMBER == int(b.os.environ.get("FORGE_BOARD") or 4)
+    assert b.BOARD_NUMBER == int(
+        b.os.environ.get("FORGE_BOARD") or b.config.PROJECT_NUMBER
+    )

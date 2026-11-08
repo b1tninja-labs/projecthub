@@ -330,3 +330,31 @@ def test_an_item_whose_field_values_span_pages_is_marked_truncated():
     items = g.Projects(fake).items("me", 1)
     assert [i.truncated for i in items] == [True, False]
     assert "pageInfo { hasNextPage }" in fake.bodies()[0]["query"]
+
+
+def test_rest_project_paths_follow_the_owner_type():
+    calls: list[list[str]] = []
+
+    def run(argv: list[str], stdin: str | None = None) -> g.Completed:
+        calls.append(argv)
+        if argv[:3] == ["api", "-i", "user"]:
+            return g.Completed(
+                0, "HTTP/2.0 200 OK\nX-Oauth-Scopes: project, repo\n\n{}", ""
+            )
+        if argv[-2:] == ["--jq", ".type"]:
+            return g.Completed(
+                0, "Organization\n" if "labs" in argv[1] else "User\n", ""
+            )
+        return g.Completed(0, "[]", "")
+
+    client = g.Projects(run)
+    client.rest_field_ids("b1tninja-labs", 1)
+    client.rest_field_ids("b1tninja-labs", 1)
+    client.rest_field_ids("b1tninja", 4)
+    paths = [c[1] for c in calls if "projectsV2" in c[1]]
+    assert paths[0].startswith("orgs/b1tninja-labs/") and paths[2].startswith(
+        "users/b1tninja/"
+    )
+    assert sum(c[-2:] == ["--jq", ".type"] for c in calls) == 2, (
+        "the owner type is asked once per owner"
+    )

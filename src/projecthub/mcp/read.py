@@ -30,6 +30,8 @@ sentence away.
 
 from __future__ import annotations
 
+from projecthub import config
+
 import json
 import os
 import pathlib
@@ -46,6 +48,8 @@ from projecthub.github.sync import MARKER, PROJECTS, STATUSES, gh
 # here and failing in CI, where D:/code does not exist.
 ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
 
+# The owner used to name a project's repository. Moved repositories resolve from here through GitHub's
+# redirect, and some stay personal on purpose; the Project's own owner is config.PROJECT_OWNER.
 ORG = "b1tninja"
 OPENISH = ("open",)
 
@@ -257,7 +261,9 @@ def ready_rows(
     }
 
 
-def active_projects(owner: str = ORG, number: int = 4) -> set[str]:
+def active_projects(
+    owner: str = config.PROJECT_OWNER, number: int = config.PROJECT_NUMBER
+) -> set[str]:
     """Projects the owner marked Active on the board. Read, never inferred: Active is the owner's call."""
     from projecthub.github.client import Projects
 
@@ -777,10 +783,10 @@ def build():
         except (
             Exception
         ) as error:  # the board read failed: say so, never return an empty list
-            raise ToolError(f"could not read Active from board #4: {error}") from error
+            raise ToolError(f"could not read Active from the board: {error}") from error
         if not chosen:
             raise ToolError(
-                "no project is marked Active on board #4; set Active on at most two projects, or pass active=[...]"
+                "no project is marked Active on the board; set Active on at most two projects, or pass active=[...]"
             )
         return ready_rows(chosen, project, limit, leased=_live_leases())  # type: ignore[return-value]
 

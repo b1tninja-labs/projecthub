@@ -248,7 +248,7 @@ def pick(
 
     Ordering is the whole policy: continue a row already In progress, then start a Ready row inside a project
     somebody marked Active, and only then reach outside the active two - and even then it is proposed, never
-    taken, because board #4's own readme reserves Active for a person. The file is the authority on a row and
+    taken, because the board's own readme reserves Active for a person. The file is the authority on a row and
     the board is the authority on intent, so both are read and a disagreement is reported as a caveat rather
     than quietly preferring one.
     """
@@ -371,7 +371,7 @@ def _step(
         "active_projects": active,
         "active_rule": f"{len(active)} of {views.ACTIVE_LIMIT} slots used",
         "promote": promote,
-        "needs": "a person sets Active on this project: board #4 reserves that field"
+        "needs": "a person sets Active on this project: the board reserves that field"
         if promote
         else "",
         "caveats": caveats,
