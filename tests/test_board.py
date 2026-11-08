@@ -537,3 +537,16 @@ def test_the_board_is_chosen_by_number_and_defaults_to_the_configured_one(
     assert b.BOARD_NUMBER == int(
         b.os.environ.get("FORGE_BOARD") or b.config.PROJECT_NUMBER
     )
+
+
+def test_schema_only_sets_up_the_project_without_reading_the_workspace(
+    tmp_path, monkeypatch
+):
+    world = World(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        b, "build", lambda *a: pytest.fail("schema-only must not build cards")
+    )
+    assert world.run("--schema-only", "--apply") == 0
+    assert world.client.writes == [], (
+        "a complete schema needs no repair, and no card was touched"
+    )

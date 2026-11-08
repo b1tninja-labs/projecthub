@@ -1188,6 +1188,11 @@ def main(
     )
     parser.add_argument("--owner", default=OWNER)
     parser.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="only the Project's fields and views: needs no workspace, so a workflow can run it",
+    )
+    parser.add_argument(
         "--project",
         action="append",
         help="touch only these projects: their card, epics and rows",
@@ -1226,7 +1231,11 @@ def main(
             number = made.number
             print(f"created board #{number}")
         board = Board(client, args.owner, number, args.apply, issues)
-        build(board, set(args.project) if args.project else None)
+        if args.schema_only:
+            board.schema(write=True)
+            board.views()
+        else:
+            build(board, set(args.project) if args.project else None)
     except GhProjectsError as error:
         print(f"board: {error}", file=sys.stderr)
         return 1
