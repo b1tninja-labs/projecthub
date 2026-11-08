@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from planforge.site import export as X
+from projecthub.site import export as X
 
 
 def _repo(

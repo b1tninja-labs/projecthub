@@ -12,9 +12,9 @@ import pathlib
 
 import pytest
 
-from planforge.github import board as b
-from planforge.github import client as g
-from planforge import registry as p
+from projecthub.github import board as b
+from projecthub.github import client as g
+from projecthub import registry as p
 
 
 def test_status_options_keep_ids_through_a_rename():

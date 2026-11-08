@@ -34,11 +34,11 @@ import re
 from collections.abc import Callable, Sequence
 from typing import Any, cast
 
-from planforge import deps
-from planforge.mcp import read as planner
-from planforge.github import projects_mcp as views
-from planforge.db import parser as roadmap
-from planforge.github.client import Item, Projects
+from projecthub import deps
+from projecthub.mcp import read as planner
+from projecthub.github import projects_mcp as views
+from projecthub.db import parser as roadmap
+from projecthub.github.client import Item, Projects
 
 ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
 OWNER = os.environ.get("LOOP_OWNER") or views.DEFAULT_OWNER

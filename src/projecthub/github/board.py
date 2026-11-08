@@ -48,11 +48,11 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from planforge import registry as portfolio
-from planforge.db import parser as roadmap
-from planforge.github import rowdoc
-from planforge.github.client import Change, GhProjectsError, Item, Project, Projects
-from planforge.github.sync import STATUSES, gh, rows_of
+from projecthub import registry as portfolio
+from projecthub.db import parser as roadmap
+from projecthub.github import rowdoc
+from projecthub.github.client import Change, GhProjectsError, Item, Project, Projects
+from projecthub.github.sync import STATUSES, gh, rows_of
 
 ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
 OWNER = "b1tninja"

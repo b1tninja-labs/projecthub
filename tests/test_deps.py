@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 
-from planforge import deps as d
+from projecthub import deps as d
 
 PLAN = """# Portfolio position
 

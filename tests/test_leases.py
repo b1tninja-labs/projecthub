@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from planforge.mcp import work as L
+from projecthub.mcp import work as L
 
 
 class Clock:

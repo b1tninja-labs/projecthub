@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 
-from planforge.db import importer as I
-from planforge.db import store as forgedb
+from projecthub.db import importer as I
+from projecthub.db import store as forgedb
 
 ROADMAP = """# demo roadmap
 

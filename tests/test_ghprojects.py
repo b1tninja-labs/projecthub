@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from planforge.github import client as g
+from projecthub.github import client as g
 
 
 class Fake:

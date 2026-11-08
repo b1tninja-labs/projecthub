@@ -22,7 +22,7 @@ Usage:
 
 from __future__ import annotations
 
-from planforge import paths
+from projecthub import paths
 
 import json
 import os
@@ -511,7 +511,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
 
 def _ready_from_planner(project: str, row_id: str) -> str:
     """Empty if forge_next would list the row, else the reason it is held back."""
-    from planforge.mcp import read as planner
+    from projecthub.mcp import read as planner
 
     try:
         active = planner.active_projects()

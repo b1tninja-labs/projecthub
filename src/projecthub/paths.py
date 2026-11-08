@@ -1,4 +1,4 @@
-"""Where the workspace and planforge's own state live, and which paths may hold generated records."""
+"""Where the workspace and projecthub's own state live, and which paths may hold generated records."""
 
 from __future__ import annotations
 

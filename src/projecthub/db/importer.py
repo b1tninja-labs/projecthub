@@ -43,8 +43,8 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from planforge.db import store as forgedb
-from planforge.db import parser as roadmap
+from projecthub.db import store as forgedb
+from projecthub.db import parser as roadmap
 
 TYPES = (
     "project",
@@ -554,7 +554,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--project", action="append", default=[])
     parser.add_argument("--db", default=":memory:")
     args = parser.parse_args(argv)
-    from planforge import paths
+    from projecthub import paths
 
     refused = paths.refuse_path(args.report_dir / "x")
     if refused:

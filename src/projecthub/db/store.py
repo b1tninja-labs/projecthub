@@ -23,7 +23,7 @@ proven lossless, so this module does only three things:
 
 from __future__ import annotations
 
-from planforge import paths
+from projecthub import paths
 
 import argparse
 import hashlib
@@ -35,7 +35,7 @@ import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 
-from planforge.db import parser as roadmap
+from projecthub.db import parser as roadmap
 
 ROOT = paths.ROOT
 BEGIN = re.compile(r"^<!-- forge:matrix begin rev=(\d+) sha256=([0-9a-f]{64}) -->\s*$")
@@ -358,7 +358,7 @@ class Store:
 
 
 def matrices(root: pathlib.Path) -> Iterator[tuple[str, pathlib.Path]]:
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     for entry in portfolio.entries():
         path = roadmap.matrix_path(root, entry.name)

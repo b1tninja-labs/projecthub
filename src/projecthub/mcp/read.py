@@ -37,9 +37,9 @@ import subprocess
 import sys
 from typing import Any, TypedDict
 
-from planforge.db import parser as roadmap
-from planforge.db.parser import rows_of
-from planforge.github.sync import MARKER, PROJECTS, STATUSES, gh
+from projecthub.db import parser as roadmap
+from projecthub.db.parser import rows_of
+from projecthub.github.sync import MARKER, PROJECTS, STATUSES, gh
 
 # Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
 # this machine's layout into every read and write; the planner's own tests discovered that by passing
@@ -160,7 +160,7 @@ def ready_rows(
     for a generated shell writing the test is the first step of the work, and the lease an agent then takes
     is what marks it in progress.
     """
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     base = root or ROOT
     entries = portfolio.entries()
@@ -259,7 +259,7 @@ def ready_rows(
 
 def active_projects(owner: str = ORG, number: int = 4) -> set[str]:
     """Projects the owner marked Active on the board. Read, never inferred: Active is the owner's call."""
-    from planforge.github.client import Projects
+    from projecthub.github.client import Projects
 
     return {
         item.title.split(":", 1)[0].strip()
@@ -429,13 +429,13 @@ PACKET_LIMIT = 50_000
 
 def _live_leases() -> set[str]:
     """Row keys under a live lease. No lease database yet means no leases, not an error."""
-    from planforge.mcp import work as leases
+    from projecthub.mcp import work as leases
 
     return leases.Store().live_keys()
 
 
 def _live_lease_rows() -> dict[str, dict[str, str]]:
-    from planforge.mcp import work as leases
+    from projecthub.mcp import work as leases
 
     return {
         x.row_key: {
@@ -462,7 +462,7 @@ def _find_row(
     row_ref: str, base: pathlib.Path
 ) -> tuple[Any, pathlib.Path, dict[str, str]]:
     """The portfolio entry, matrix file and row a reference names: project:row, or a row id unique across projects."""
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     entries = {e.name: e for e in portfolio.entries()}
     project, _, row_id = row_ref.rpartition(":")
@@ -495,8 +495,8 @@ def packet(
     the clause itself through rfclib, because a packet that paraphrased normative text would be the very
     "from memory" citation the workspace forbids.
     """
-    from planforge import registry as portfolio
-    from planforge.github import rowdoc
+    from projecthub import registry as portfolio
+    from projecthub.github import rowdoc
 
     base = root or ROOT
     entry, path, row = _find_row(row_ref, base)

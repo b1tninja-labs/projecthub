@@ -17,8 +17,8 @@ import pathlib
 
 import pytest
 
-from planforge.db import parser as roadmap
-from planforge.github import sync as s
+from projecthub.db import parser as roadmap
+from projecthub.github import sync as s
 
 # The real pkix row, under the real pkix header: five columns, the last one a Milestone.
 PKIX_ROW = (

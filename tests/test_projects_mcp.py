@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from planforge.github import client as g
-from planforge.github import projects_mcp as m
+from projecthub.github import client as g
+from projecthub.github import projects_mcp as m
 
 
 def item(title: str, **values: object) -> g.Item:

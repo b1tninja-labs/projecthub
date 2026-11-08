@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from planforge.mcp import read as p
+from projecthub.mcp import read as p
 
 REAL_TEST_ROW = "| `x.y()` | RFC 5280 | `[ ]` | `tests/test_roadmap_rows.py::test_every_row_names_a_real_callable` |\n"
 PHANTOM_ROW = (
@@ -272,7 +272,7 @@ def _project(root, name, rows, pyproject=True):
 def test_named_test_comes_from_evidence_when_where_is_a_module(workspace):
     root = workspace
     _project(root, "ledger", [])
-    from planforge.db import parser as roadmap
+    from projecthub.db import parser as roadmap
 
     where = "`ledger/fanout.py` (planned)"
     assert roadmap.named_test(
@@ -294,7 +294,7 @@ def test_named_test_comes_from_evidence_when_where_is_a_module(workspace):
 def test_ready_rows_hold_back_inactive_plan_and_blocked_projects(
     workspace, monkeypatch
 ):
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     root = workspace
     open_row = "| `a.{n}()` | RFC 1 | `[ ]` | `tests/test_a.py::test_{n}` (to be written) | | M{m} |\n"
@@ -344,7 +344,7 @@ def test_ready_rows_hold_back_inactive_plan_and_blocked_projects(
 
 
 def test_a_leased_row_is_held_back_as_in_progress(workspace, monkeypatch):
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     _project(
         workspace,
@@ -370,7 +370,7 @@ def test_a_packet_stays_under_the_limit_and_carries_no_specification_text(
 ):
     import json
 
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     row = "| `a.x()` | RFC 5280 sec. 6.1 | `[ ]` | `tests/test_a.py::test_x` (to be written) | | M1 |\n"
     _project(workspace, "alpha", [row])
@@ -415,7 +415,7 @@ def test_a_packet_stays_under_the_limit_and_carries_no_specification_text(
 def test_a_packet_refuses_plan_directories_unknown_and_ambiguous_rows(
     workspace, monkeypatch
 ):
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     row = "| `a.x()` | RFC 1 | `[ ]` | `tests/test_a.py::test_x` (to be written) | | M1 |\n"
     _project(workspace, "alpha", [row])

@@ -7,7 +7,7 @@ import textwrap
 
 import pytest
 
-from planforge.evidence import mutate as M
+from projecthub.evidence import mutate as M
 
 VERIFIER = '''\
 def _even(value: int) -> bool:

@@ -12,8 +12,8 @@ import pathlib
 
 import pytest
 
-from planforge.db import parser as r
-from planforge.data import PROJECTS
+from projecthub.db import parser as r
+from projecthub.data import PROJECTS
 
 MATRIX = """# Roadmap
 

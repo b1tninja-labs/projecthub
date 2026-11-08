@@ -19,7 +19,7 @@ Exit 2 when --out is inside the workspace or a git work tree, as verify.py --jso
 
 from __future__ import annotations
 
-from planforge import paths
+from projecthub import paths
 
 import argparse
 import json
@@ -173,9 +173,9 @@ def milestones(rows: list[dict[str, str]]) -> tuple[int, int]:
 def registry_entries(
     root: pathlib.Path, gh: dict[str, dict[str, Any]], active: set[str] | None
 ) -> list[dict[str, Any]]:
-    from planforge import deps
-    from planforge import registry as portfolio
-    from planforge.db import parser as roadmap
+    from projecthub import deps
+    from projecthub import registry as portfolio
+    from projecthub.db import parser as roadmap
 
     out = []
     for e in portfolio.entries():
@@ -462,7 +462,7 @@ def contract_problems(record: dict[str, Any]) -> list[str]:
 def _active_projects() -> set[str] | None:
     """The board's Active projects, or None when the board cannot be read (offline, no token)."""
     try:
-        from planforge.mcp import read as planner
+        from projecthub.mcp import read as planner
 
         return set(planner.active_projects())
     except Exception:  # noqa: BLE001 - the board is an enrichment, never a reason to fail the export
@@ -485,12 +485,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--no-board", action="store_true", help="do not read Active from the board"
     )
     args = parser.parse_args(argv)
-    from planforge import registry as portfolio
+    from projecthub import registry as portfolio
 
     if not args.seed:
         if args.out is None:
             parser.error("--out is required unless --seed")
-        from planforge import paths
+        from projecthub import paths
 
         refused = paths.refuse_path(args.out)
         if refused:

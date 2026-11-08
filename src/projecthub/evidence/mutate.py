@@ -39,7 +39,7 @@ import time
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass
 
-from planforge.db import parser as roadmap
+from projecthub.db import parser as roadmap
 
 SCHEMA = "sdk-forge/row-mutation/1"
 FLIP = {ast.GtE: ast.Gt, ast.Gt: ast.GtE, ast.LtE: ast.Lt, ast.Lt: ast.LtE}
@@ -400,7 +400,7 @@ def select(node: str, which: str) -> list[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    from planforge.evidence import check as evidence_check
+    from projecthub.evidence import check as evidence_check
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", type=pathlib.Path, default=pathlib.Path.cwd())
@@ -422,7 +422,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--json", type=pathlib.Path)
     args = parser.parse_args(argv)
     if args.json is not None:
-        from planforge import paths
+        from projecthub import paths
 
         refused = paths.refuse_path(args.json)
         if refused:

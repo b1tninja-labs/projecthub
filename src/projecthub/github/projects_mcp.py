@@ -33,7 +33,7 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import Any, TypedDict
 
-from planforge.github.client import GhProjectsError, Item, Projects
+from projecthub.github.client import GhProjectsError, Item, Projects
 
 DEFAULT_OWNER = os.environ.get("PROJECTS_MCP_OWNER", "b1tninja")
 DEFAULT_NUMBER = int(os.environ.get("PROJECTS_MCP_NUMBER", "4"))

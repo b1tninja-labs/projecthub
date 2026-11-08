@@ -10,8 +10,8 @@ import pathlib
 
 import pytest
 
-from planforge.github import rowdoc
-from planforge.github import sync as s
+from projecthub.github import rowdoc
+from projecthub.github import sync as s
 
 ROADMAP = """# Roadmap
 

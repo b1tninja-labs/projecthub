@@ -6,8 +6,8 @@ import importlib
 
 import pytest
 
-from planforge import cli
-from planforge.data import POSITION, PROJECTS
+from projecthub import cli
+from projecthub.data import POSITION, PROJECTS
 
 
 @pytest.mark.parametrize("name", sorted(cli.COMMANDS))
@@ -17,14 +17,14 @@ def test_every_command_names_a_module_with_a_main(name):
 
 
 def test_help_lists_every_command(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["planforge", "--help"])
+    monkeypatch.setattr("sys.argv", ["projecthub", "--help"])
     assert cli.main() == 0
     out = capsys.readouterr().out
     assert all(name in out for name in cli.COMMANDS)
 
 
 def test_an_unknown_command_is_an_error(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["planforge", "nope"])
+    monkeypatch.setattr("sys.argv", ["projecthub", "nope"])
     assert cli.main() == 2
     assert "usage" in capsys.readouterr().out
 

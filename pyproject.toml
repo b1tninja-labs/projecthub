@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "planforge"
+name = "projecthub"
 dynamic = ["version"]
 description = "A local planning database for coding agents: typed entries, checked citations, evidence-gated done, mirrored to GitHub Projects"
 readme = "README.md"
@@ -17,16 +17,16 @@ mcp = ["mcp>=2.3,<3"]
 dev = ["ruff==0.15.12", "mypy==1.20.2", "pytest==9.0.3", "mcp==2.3.0", "coverage==7.17.0", "anyio"]
 
 [project.scripts]
-planforge = "planforge.cli:main"
+projecthub = "projecthub.cli:main"
 
 [project.urls]
-Repository = "https://github.com/b1tninja-labs/forge"
+Repository = "https://github.com/b1tninja-labs/projecthub"
 
 [tool.hatch.version]
-path = "src/planforge/__init__.py"
+path = "src/projecthub/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/planforge"]
+packages = ["src/projecthub"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

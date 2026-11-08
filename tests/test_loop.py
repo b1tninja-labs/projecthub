@@ -13,9 +13,9 @@ from __future__ import annotations
 import pathlib
 import types
 
-from planforge import deps
-from planforge.github import client as g
-from planforge.mcp import loop
+from projecthub import deps
+from projecthub.github import client as g
+from projecthub.mcp import loop
 
 
 def card(title: str, repo: str = "pkix", **values: object) -> g.Item:

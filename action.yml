@@ -49,6 +49,6 @@ runs:
         root=$(mktemp -d)
         mkdir -p "$root/$project"
         cp ROADMAP.md "$root/$project/"
-        planforge sync --check --project "$project" --root "$root" \
+        projecthub sync --check --project "$project" --root "$root" \
           --org "${GITHUB_REPOSITORY_OWNER}"
       shell: bash

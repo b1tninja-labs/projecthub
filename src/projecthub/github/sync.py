@@ -51,13 +51,13 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-from planforge import registry as portfolio
-from planforge.db import parser as roadmap
-from planforge.github import rowdoc
+from projecthub import registry as portfolio
+from projecthub.db import parser as roadmap
+from projecthub.github import rowdoc
 
 # One project list, shared with verify.py in this directory, so the two cannot drift apart. planner.py
 # imports it from here.
-from planforge.data import PROJECTS
+from projecthub.data import PROJECTS
 
 MARKER = "<!-- roadmap:{} -->"
 MARKER_RE = re.compile(r"<!-- roadmap:(\S+) -->")

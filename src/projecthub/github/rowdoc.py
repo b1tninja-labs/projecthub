@@ -24,7 +24,7 @@ import pathlib
 import re
 from dataclasses import dataclass
 
-from planforge.db import parser as roadmap
+from projecthub.db import parser as roadmap
 
 # The grammar lives in roadmap.py; the name stays importable from here for callers that already use it.
 TEST_REF = roadmap.TEST_REF
@@ -143,7 +143,7 @@ def test_evidence(
 
 def dependency_lines(root: pathlib.Path, name: str) -> list[str]:
     """One line per dependency in the project's plan, with its state read from the workspace."""
-    from planforge import (
+    from projecthub import (
         deps,
     )  # lazy: deps imports sync_roadmap, which imports this module
 

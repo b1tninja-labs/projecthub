@@ -1,4 +1,4 @@
-"""Data planforge owns: the project registry, and the curated list of other public repositories."""
+"""Data projecthub owns: the project registry, and the curated list of other public repositories."""
 
 from __future__ import annotations
 

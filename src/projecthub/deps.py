@@ -23,8 +23,8 @@ import pathlib
 import re
 from dataclasses import dataclass
 
-from planforge.github.sync import STATUSES, rows_of
-from planforge.data import PROJECTS
+from projecthub.github.sync import STATUSES, rows_of
+from projecthub.data import PROJECTS
 
 ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
 

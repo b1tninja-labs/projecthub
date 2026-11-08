@@ -40,7 +40,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
-from planforge.db import parser as roadmap
+from projecthub.db import parser as roadmap
 
 SCHEMA = "sdk-forge/roadmap-evidence/1"
 ASSERTING_CALLS = {"raises", "warns", "fail", "deprecated_call"}
@@ -392,7 +392,7 @@ def audit_row(
     out.reason = "" if ok else f"L3: {detail['reason']}"
     if not ok or not mutate:
         return out
-    from planforge.evidence import mutate as M
+    from projecthub.evidence import mutate as M
 
     target = M.locate(head, row["name"])
     if target is None:
@@ -510,7 +510,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--no-mutate", action="store_true", help="skip L4 (mutation)")
     args = parser.parse_args(argv)
     if args.json is not None:
-        from planforge import paths
+        from projecthub import paths
 
         refused = paths.refuse_path(args.json)
         if refused:

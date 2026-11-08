@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 
-from planforge.db import store as F
-from planforge.db import parser as roadmap
+from projecthub.db import store as F
+from projecthub.db import parser as roadmap
 
 MIXED = (
     "# demo\n"

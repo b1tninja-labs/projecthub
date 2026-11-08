@@ -18,7 +18,7 @@ The few projects outside forge.POSITION are listed in EXTRA with the PORTFOLIO.m
 
 from __future__ import annotations
 
-from planforge.data import POSITION
+from projecthub.data import POSITION
 
 import pathlib
 import re
@@ -252,9 +252,9 @@ def github_repo(root: pathlib.Path, directory: str) -> str:
 
 
 def state(root: pathlib.Path, entry: Entry) -> State:
-    from planforge import deps
-    from planforge.github import rowdoc
-    from planforge.github.sync import STATUSES, rows_of
+    from projecthub import deps
+    from projecthub.github import rowdoc
+    from projecthub.github.sync import STATUSES, rows_of
 
     folder = root / entry.directory
     matrix = next(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from planforge import registry as p
+from projecthub import registry as p
 
 TEXT = """# Plan
 

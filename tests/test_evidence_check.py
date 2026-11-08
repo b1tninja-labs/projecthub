@@ -9,7 +9,7 @@ import textwrap
 
 import pytest
 
-from planforge.evidence import check as E
+from projecthub.evidence import check as E
 
 MATRIX = """# demo
 
