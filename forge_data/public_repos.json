@@ -1,0 +1,401 @@
+{
+  "_note": "Hand-owned. include/section/kind/what/display_name per public repo not in the registry. Set reviewed true once checked. A repo missing here is not shown.",
+  "repos": {
+    "010editor-mcp": {
+      "include": true,
+      "section": "tools",
+      "kind": "mcp",
+      "reviewed": false
+    },
+    "010editor-reference": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "5268ac": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "aiobtc": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "aiohdfs": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "ath10k-firmware": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "basilisk": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "brother-firmware": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "continuous": {
+      "include": true,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "craft-libs": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "deckcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "designcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "dhtrack": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "django_dnspy": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "fakeprint": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "fakeprint-python": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "fakescan": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "fakescan-python": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "faster-whisper-cuda-server": {
+      "include": true,
+      "section": "tools",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "figcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "flippingchillin": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "gcc-python-plugin": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "ghidra-mcp": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "gnuradio": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "gridcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "gtavhax": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "hardly": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "hayro": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "hdllib-ng": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "hostap": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "i-doxs": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "kernel_xiaomi_lte26007": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "lawlibrary": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "lightcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "linux": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "LoRaBLE": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "malbot": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "masscan": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "masscanpy": {
+      "include": true,
+      "section": "tools",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "mfc9330cdw": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "mirc-mcp": {
+      "include": true,
+      "section": "tools",
+      "kind": "mcp",
+      "reviewed": false
+    },
+    "misty": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "payhoa": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "pcappy": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "pdfcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "pdfcraft-python": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "photocraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "plextor": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "printscan": {
+      "include": true,
+      "section": "re",
+      "kind": "hardware",
+      "reviewed": false
+    },
+    "projfs": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "protobuf-to-dict": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "PyDictionary": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "smud": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "snmpy": {
+      "include": true,
+      "section": "other",
+      "kind": "library",
+      "reviewed": false
+    },
+    "spacedroid": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "strata-launcher": {
+      "include": true,
+      "section": "tools",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "systemd": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "terraform-aws-strata": {
+      "include": true,
+      "section": "tools",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "tr-plugin-srt": {
+      "include": true,
+      "section": "tools",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "trunk-recorder": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "trunk-server": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "vectorcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "wheelhouse": {
+      "include": true,
+      "section": "archive",
+      "kind": "app",
+      "reviewed": false
+    },
+    "winprint.rs": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    },
+    "wordcraft": {
+      "include": true,
+      "section": "forks",
+      "kind": "app",
+      "reviewed": false
+    },
+    "WSL-ArchLinux": {
+      "include": false,
+      "section": "forks",
+      "kind": "tool",
+      "reviewed": false
+    }
+  }
+}
