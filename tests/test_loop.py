@@ -11,6 +11,8 @@ everywhere is what let a wrong field name survive there. A stub cannot catch a m
 from __future__ import annotations
 
 import pathlib
+
+import pytest
 import types
 
 from projecthub import deps
@@ -375,12 +377,13 @@ def test_blockings_reads_the_real_dependency_graph():
     with a dependency, and it has one: asn1core, whose state is real code. Had this test existed, the selector
     would have crashed in front of a test instead of in front of a run.
     """
-    hard, notes = loop.blockings(pathlib.Path("D:/code"), "pkix")
-    assert [
-        (e.project, e.dependency) for e in deps.edges(pathlib.Path("D:/code"), "pkix")
-    ] == [("pkix", "asn1core")], (
-        "this test is only worth anything if pkix still has an edge to walk"
-    )
+    root = pathlib.Path("D:/code")
+    if not (root / "pkix" / "docs" / "plan.md").is_file():
+        pytest.skip("needs the D:/code workspace with pkix checked out")
+    hard, notes = loop.blockings(root, "pkix")
+    assert [(e.project, e.dependency) for e in deps.edges(root, "pkix")] == [
+        ("pkix", "asn1core")
+    ], "this test is only worth anything if pkix still has an edge to walk"
     assert hard == [], "asn1core is real code, so it must not withhold a pkix row"
     assert notes == []
 
