@@ -113,7 +113,7 @@ WAVES = [(f"Wave {n}", "BLUE", f"PORTFOLIO.md section 7, wave {n}.") for n in ra
 ACTIVE = [
     ("Active", "GREEN", "Carries real effort now. The rule is at most two projects.")
 ]
-# User-owned accounts have no issue types, and an entry's type must filter on the board either way.
+# Not "Type": GitHub reserves that name for its own issue-type field.
 TYPES = [
     ("Epic", "PURPLE", "A wave, a milestone or a ladder rung."),
     ("Obligation", "BLUE", "Something verifiable, with a spec and a named test."),
@@ -139,7 +139,7 @@ SELECTS = {
     "Priority": PRIORITY,
     "Wave": WAVES,
     "Active": ACTIVE,
-    "Type": TYPES,
+    "Entry type": TYPES,
     "Citations": CITATIONS,
 }
 NUMBERS = ("Rows done", "Rows open")
@@ -493,14 +493,16 @@ def view_specs(ids: dict[str, int]) -> list[dict[str, object]]:
             "layout": "table",
             "filter": "status:Triage",
             "sort_by": [],
-            "visible_fields": f("Title", "Type", "Repository", "Spec", "Last activity"),
+            "visible_fields": f(
+                "Title", "Entry type", "Repository", "Spec", "Last activity"
+            ),
         },
         {
             "name": "Stale specs",
             "layout": "table",
             "filter": 'citations:Obsolete,Errata,"Edition changed"',
             "sort_by": sort("Priority"),
-            "visible_fields": f("Title", "Type", "Citations", "Spec", "Status"),
+            "visible_fields": f("Title", "Entry type", "Citations", "Spec", "Status"),
         },
     ]
 
