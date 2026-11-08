@@ -64,6 +64,11 @@ BOARD_NUMBER = int(os.environ.get("FORGE_BOARD") or config.PROJECT_NUMBER)
 ISSUE_LIMIT = 1000
 
 STATUS = [
+    (
+        "Triage",
+        "PINK",
+        "Proposed by an agent. Move it to Backlog to accept it into the plan.",
+    ),
     ("Backlog", "GRAY", "Not started. For a row: the ROADMAP reads [ ] or [part]."),
     ("Ready", "BLUE", "Chosen for a cycle and unblocked. Claim it before starting."),
     ("In progress", "YELLOW", "Claimed: someone is working on it now."),
@@ -73,7 +78,7 @@ STATUS = [
         "RED",
         "Waiting on a dependency, a document or a decision: say which in Blocked by.",
     ),
-    ("Done", "GREEN", "For a row: the ROADMAP reads [ok] and its named test exists."),
+    ("Done", "GREEN", "Computed: an evidence record passes on the default branch."),
 ]
 ALIASES = {"Backlog": ("Todo",), "In progress": ("In Progress",)}
 
@@ -108,6 +113,25 @@ WAVES = [(f"Wave {n}", "BLUE", f"PORTFOLIO.md section 7, wave {n}.") for n in ra
 ACTIVE = [
     ("Active", "GREEN", "Carries real effort now. The rule is at most two projects.")
 ]
+# User-owned accounts have no issue types, and an entry's type must filter on the board either way.
+TYPES = [
+    ("Epic", "PURPLE", "A wave, a milestone or a ladder rung."),
+    ("Obligation", "BLUE", "Something verifiable, with a spec and a named test."),
+    ("Task", "GRAY", "Needed work with no spec behaviour: CI, docs, a release."),
+    ("Bug", "RED", "A regression or defect, found in another entry."),
+    ("Question", "YELLOW", "An open question that blocks or shapes work."),
+    ("Decision", "ORANGE", "Proposed, accepted or superseded by the owner."),
+    ("Finding", "PINK", "Negative knowledge: a dead end, so nobody repeats it."),
+    ("Rule", "GREEN", "An invariant shown in every packet for its project."),
+]
+# The worst status among an entry's citations, so a "Stale specs" view needs no body parsing.
+CITATIONS = [
+    ("Current", "GREEN", "Every citation resolves to a current document."),
+    ("Errata", "ORANGE", "A cited section has verified errata."),
+    ("Edition changed", "YELLOW", "A newer edition of a cited document exists."),
+    ("Obsolete", "RED", "A cited document is obsolete; its successor is named."),
+    ("Unresolved", "GRAY", "A citation has not been checked against its source."),
+]
 SELECTS = {
     "Level": LEVELS,
     "Kind": KINDS,
@@ -115,9 +139,12 @@ SELECTS = {
     "Priority": PRIORITY,
     "Wave": WAVES,
     "Active": ACTIVE,
+    "Type": TYPES,
+    "Citations": CITATIONS,
 }
 NUMBERS = ("Rows done", "Rows open")
-TEXT_FIELDS = ("Spec", "Named test", "Blocked by")
+TEXT_FIELDS = ("Spec", "Named test", "Blocked by", "Agent", "Last activity")
+DATE_FIELDS = ("Claimed",)
 CYCLE_START = "2026-11-09"
 CYCLE_DAYS = 14
 CYCLES = 6
@@ -461,6 +488,20 @@ def view_specs(ids: dict[str, int]) -> list[dict[str, object]]:
             "filter": "assignee:@me -status:Done",
             "visible_fields": rows,
         },
+        {
+            "name": "Triage",
+            "layout": "table",
+            "filter": "status:Triage",
+            "sort_by": [],
+            "visible_fields": f("Title", "Type", "Repository", "Spec", "Last activity"),
+        },
+        {
+            "name": "Stale specs",
+            "layout": "table",
+            "filter": 'citations:Obsolete,Errata,"Edition changed"',
+            "sort_by": sort("Priority"),
+            "visible_fields": f("Title", "Type", "Citations", "Spec", "Status"),
+        },
     ]
 
 
@@ -766,6 +807,9 @@ class Board:
         for name in TEXT_FIELDS:
             if name not in project.fields and self.say(f"create field {name}"):
                 self.client.create_field(project.id, name, "TEXT")
+        for name in DATE_FIELDS:
+            if name not in project.fields and self.say(f"create field {name}"):
+                self.client.create_field(project.id, name, "DATE")
         if "Cycle" not in project.fields and self.say(
             f"create field Cycle (two-week, from {CYCLE_START})"
         ):

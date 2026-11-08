@@ -230,6 +230,8 @@ def full_schema() -> g.Project:
         fields[name] = g.Field(name, name, "NUMBER")
     for name in b.TEXT_FIELDS:
         fields[name] = g.Field(name, name, "TEXT")
+    for name in b.DATE_FIELDS:
+        fields[name] = g.Field(name, name, "DATE")
     return g.Project(
         "PRJ", b.BOARD_NUMBER, "Protocol SDK portfolio", False, fields=fields
     )
