@@ -190,3 +190,50 @@ def test_an_export_path_inside_a_work_tree_is_refused_before_github_is_called(
     )
     assert X.main(["--out", str(X.HERE / "portfolio.json")]) == 2
     assert "inside the workspace" in capsys.readouterr().err
+
+
+def _record(**project):
+    base = {
+        "name": "x",
+        "section": "other",
+        "what": "x",
+        "blocked_by": [],
+        "milestones_done": 0,
+        "milestones_total": 0,
+        "repo_url": "https://github.com/b1tninja/x",
+    }
+    return {
+        "board_url": X.BOARD_URL,
+        "sections": [{"id": "other"}],
+        "projects": [{**base, **project}],
+    }
+
+
+def test_a_clean_record_meets_the_sites_contract():
+    assert X.contract_problems(_record()) == []
+    assert X.contract_problems(_record(what=None)) == [], "what may be null"
+
+
+@pytest.mark.parametrize(
+    ("project", "fragment"),
+    [
+        ({"repo_url": "http://example.com"}, "not a plain https://"),
+        ({"repo_url": "https://example.com/a b"}, "not a plain https://"),
+        ({"homepage_url": 'https://x/"'}, "not a plain https://"),
+        ({"section": "misc"}, "not in sections[]"),
+        ({"blocked_by": "rpkit"}, "blocked_by must be a list"),
+        ({"milestones_done": 1.0}, "must be an integer"),
+        ({"milestones_total": True}, "must be an integer"),
+        ({"what": 3}, "string or null"),
+    ],
+)
+def test_each_contract_breach_is_named(project, fragment):
+    problems = X.contract_problems(_record(**project))
+    assert any(fragment in p for p in problems), problems
+
+
+def test_utf8_and_raw_angle_brackets_are_written_as_characters_not_escapes():
+    record = _record(what="DER & X.509 <codec> \u2014 ok \ufffd")
+    text = X.serialise(record)
+    assert "\u2014" in text and "<codec>" in text and "\\u" not in text
+    assert X.contract_problems(record) == []

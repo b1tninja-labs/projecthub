@@ -381,6 +381,58 @@ def build(
     }
 
 
+URL_FIELDS = ("roadmap_url", "board_url", "repo_url", "homepage_url")
+FORBIDDEN_ESCAPES = ("\\u003c", "\\u003e", "\\u0026", "\\u0022")
+URL_BAD_CHARS = "\"' \t\r\n<>\\"
+
+
+def serialise(record: dict[str, Any]) -> str:
+    """The exact text written. ensure_ascii=False keeps UTF-8 as characters, so no \\u escapes appear."""
+    return json.dumps(record, indent=2, ensure_ascii=False) + "\n"
+
+
+def contract_problems(record: dict[str, Any]) -> list[str]:
+    """What the site's `tofu plan` would reject, checked here first so a bad export fails in sdk-forge.
+
+    From the site's contract (aws-infra sites/b1tninja): every URL is plain https:// with no quotes or
+    whitespace; every project's section is in sections[]; the JSON holds no escapes for <, >, & or ";
+    `what` is a string or null, `blocked_by` a list, and the milestone counts integers.
+    """
+    problems = []
+    sections = {s["id"] for s in record.get("sections", [])}
+    urls: list[tuple[str, str, object]] = [
+        ("top", "board_url", record.get("board_url"))
+    ]
+    for p in record.get("projects", []):
+        name = p.get("name", "?")
+        if p.get("section") not in sections:
+            problems.append(
+                f"{name}: section {p.get('section')!r} is not in sections[]"
+            )
+        if not isinstance(p.get("what"), str | None):
+            problems.append(f"{name}: what must be a string or null")
+        if not isinstance(p.get("blocked_by"), list):
+            problems.append(f"{name}: blocked_by must be a list")
+        for key in ("milestones_done", "milestones_total"):
+            if type(p.get(key)) is not int:
+                problems.append(f"{name}: {key} must be an integer")
+        urls += [(name, key, p.get(key)) for key in URL_FIELDS]
+    for name, key, url in urls:
+        if url is None:
+            continue
+        if (
+            not isinstance(url, str)
+            or not url.startswith("https://")
+            or any(c in url for c in URL_BAD_CHARS)
+        ):
+            problems.append(f"{name}: {key} {url!r} is not a plain https:// URL")
+    text = serialise(record).lower()
+    problems += [
+        f"the JSON contains the escape {e}" for e in FORBIDDEN_ESCAPES if e in text
+    ]
+    return problems
+
+
 def _active_projects() -> set[str] | None:
     """The board's Active projects, or None when the board cannot be read (offline, no token)."""
     try:
@@ -437,8 +489,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     assert args.out is not None
     record = build(ROOT, gh, curation, None if args.no_board else _active_projects())
+    problems = contract_problems(record)
+    if problems:
+        print(
+            "error: the export breaks the site's contract:\n  " + "\n  ".join(problems),
+            file=sys.stderr,
+        )
+        return 1
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    args.out.write_text(serialise(record), encoding="utf-8")
     counts = {
         s["id"]: sum(p["section"] == s["id"] for p in record["projects"])
         for s in record["sections"]
