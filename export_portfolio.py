@@ -31,6 +31,10 @@ from typing import Any
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 OWNER = "b1tninja"
+# Repositories are moving from the personal account to the organization one at a time (decision 11), and
+# some stay personal on purpose (PyPI trusted publishing). Both owners are listed; where a name exists under
+# both, the organization's copy wins, because GitHub redirects the old URL to it.
+OWNERS = ("b1tninja", "b1tninja-labs")
 BOARD_URL = f"https://github.com/users/{OWNER}/projects/4"
 CURATION = HERE / "forge_data" / "public_repos.json"
 SCHEMA_VERSION = 1
@@ -83,8 +87,15 @@ SECTION_IDS = [s["id"] for s in SECTIONS]
 # ---------------------------------------------------------------------------------------------- GitHub
 
 
-def github_repos(owner: str = OWNER) -> dict[str, dict[str, Any]]:
-    """Public repositories by lower-cased name, from one `gh repo list` call."""
+def github_repos(owners: Sequence[str] = OWNERS) -> dict[str, dict[str, Any]]:
+    """Public repositories by lower-cased name across `owners`, later owners winning a name both hold."""
+    found: dict[str, dict[str, Any]] = {}
+    for owner in owners:
+        found.update(_list_owner(owner))
+    return found
+
+
+def _list_owner(owner: str) -> dict[str, dict[str, Any]]:
     done = subprocess.run(  # noqa: S603, S607
         [
             "gh",
@@ -221,7 +232,9 @@ def registry_entries(
                 # Obligation rows of the project's ROADMAP/PLAN matrix: done = rows marked [ok] (non-goals are
                 # not counted). Projects almost never use `- M<n>` ladders, so these are the progress that exists.
                 "obligations_done": sum(1 for r in rows if r.get("state") == "done"),
-                "obligations_total": sum(1 for r in rows if r.get("state") != "nongoal"),
+                "obligations_total": sum(
+                    1 for r in rows if r.get("state") != "nongoal"
+                ),
                 "roadmap_url": f"{meta['repo_url']}/blob/HEAD/{matrix_rel}"
                 if meta["repo_url"] and matrix_rel
                 else None,
@@ -419,7 +432,12 @@ def contract_problems(record: dict[str, Any]) -> list[str]:
             problems.append(f"{name}: what must be a string or null")
         if not isinstance(p.get("blocked_by"), list):
             problems.append(f"{name}: blocked_by must be a list")
-        for key in ("milestones_done", "milestones_total", "obligations_done", "obligations_total"):
+        for key in (
+            "milestones_done",
+            "milestones_total",
+            "obligations_done",
+            "obligations_total",
+        ):
             if type(p.get(key)) is not int:
                 problems.append(f"{name}: {key} must be an integer")
         urls += [(name, key, p.get(key)) for key in URL_FIELDS]

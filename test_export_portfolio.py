@@ -243,3 +243,21 @@ def test_utf8_and_raw_angle_brackets_are_written_as_characters_not_escapes():
     text = X.serialise(record)
     assert "\u2014" in text and "<codec>" in text and "\\u" not in text
     assert X.contract_problems(record) == []
+
+
+def test_both_owners_are_listed_and_the_organizations_copy_wins(monkeypatch):
+    listed = {
+        "b1tninja": {
+            "rfclib": _repo("rfclib"),
+            "pkix": {**_repo("pkix"), "url": "https://github.com/b1tninja/pkix"},
+        },
+        "b1tninja-labs": {
+            "pkix": {**_repo("pkix"), "url": "https://github.com/b1tninja-labs/pkix"}
+        },
+    }
+    monkeypatch.setattr(X, "_list_owner", lambda owner: listed[owner])
+    found = X.github_repos()
+    assert set(found) == {"rfclib", "pkix"}
+    assert found["pkix"]["url"] == "https://github.com/b1tninja-labs/pkix", (
+        "a moved repo is linked at its new home"
+    )
