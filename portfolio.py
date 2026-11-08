@@ -83,7 +83,7 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         0,
         0,
         "rfclibrary",
-        "the RFC corpus and MCP server every citation rule depends on",
+        "every published RFC as precise, citable context for agents, served over MCP",
         "reference library: 'never state an RFC from memory'",
     ),
     "itulib": (
@@ -91,8 +91,16 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         0,
         0,
         "itulibrary",
-        "ITU-T X.680 and X.690, which the RFC series cannot reach",
+        "the ITU-T ASN.1 and X.500 text the RFC series cannot reach, served the same way",
         "reference library: asn1core's [verify against X.690] markers",
+    ),
+    "zimlore": (
+        "Reference",
+        0,
+        0,
+        "zimlore",
+        "offline language and framework documentation (Kiwix ZIM) as dated, citable context for agents",
+        "PORTFOLIO.md s4 reference libraries (2026-11-07)",
     ),
     "sdk-forge": (
         "Tooling",

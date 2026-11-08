@@ -166,6 +166,8 @@ def test_the_record_has_the_fields_the_site_reads_in_section_order(monkeypatch):
         "blocked_by",
         "milestones_done",
         "milestones_total",
+        "obligations_done",
+        "obligations_total",
         "roadmap_url",
         "board_url",
         "repo_url",
@@ -200,6 +202,8 @@ def _record(**project):
         "blocked_by": [],
         "milestones_done": 0,
         "milestones_total": 0,
+        "obligations_done": 0,
+        "obligations_total": 0,
         "repo_url": "https://github.com/b1tninja/x",
     }
     return {
@@ -224,6 +228,8 @@ def test_a_clean_record_meets_the_sites_contract():
         ({"blocked_by": "rpkit"}, "blocked_by must be a list"),
         ({"milestones_done": 1.0}, "must be an integer"),
         ({"milestones_total": True}, "must be an integer"),
+        ({"obligations_done": 2.5}, "must be an integer"),
+        ({"obligations_total": True}, "must be an integer"),
         ({"what": 3}, "string or null"),
     ],
 )

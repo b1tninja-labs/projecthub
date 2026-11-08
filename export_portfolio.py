@@ -42,6 +42,11 @@ SECTIONS = [
         "blurb": "Implemented and in progress: code, named tests, and a ROADMAP whose done rows are each pinned by a test.",
     },
     {
+        "id": "reference",
+        "title": "Reference libraries: the context a task needs",
+        "blurb": "The core idea: give an agent the source text instead of its memory of it. Each library serves a local corpus over MCP as precise, paged, token-budgeted extracts, every one with a citation naming its source and edition, and a missing or stale corpus is an error that names the fix, never an empty result. rfclib covers the RFC series, itulib the ITU-T ASN.1 and X.500 text the RFCs cannot reach, and zimlore language and framework documentation from Kiwix ZIM files, with the edition date and age of what it read.",
+    },
+    {
         "id": "planned",
         "title": "Planned SDKs",
         "blurb": "Generated shells and plans, by tier and wave. Each has an obligation matrix tied to the RFCs it implements.",
@@ -55,11 +60,6 @@ SECTIONS = [
         "id": "re",
         "title": "Hardware and firmware",
         "blurb": "Reverse engineering and test doubles for printers, scanners and network gear.",
-    },
-    {
-        "id": "reference",
-        "title": "Reference libraries",
-        "blurb": "Clause-precise RFC and ITU-T search and citation, used by every project above.",
     },
     {
         "id": "other",
@@ -218,6 +218,10 @@ def registry_entries(
                 "blocked_by": blocked_by,
                 "milestones_done": done_m,
                 "milestones_total": total_m,
+                # Obligation rows of the project's ROADMAP/PLAN matrix: done = rows marked [ok] (non-goals are
+                # not counted). Projects almost never use `- M<n>` ladders, so these are the progress that exists.
+                "obligations_done": sum(1 for r in rows if r.get("state") == "done"),
+                "obligations_total": sum(1 for r in rows if r.get("state") != "nongoal"),
                 "roadmap_url": f"{meta['repo_url']}/blob/HEAD/{matrix_rel}"
                 if meta["repo_url"] and matrix_rel
                 else None,
@@ -328,6 +332,8 @@ def curated_entries(
                 "blocked_by": [],
                 "milestones_done": 0,
                 "milestones_total": 0,
+                "obligations_done": 0,
+                "obligations_total": 0,
                 "roadmap_url": None,
                 "board_url": None,
                 **meta,
@@ -413,7 +419,7 @@ def contract_problems(record: dict[str, Any]) -> list[str]:
             problems.append(f"{name}: what must be a string or null")
         if not isinstance(p.get("blocked_by"), list):
             problems.append(f"{name}: blocked_by must be a list")
-        for key in ("milestones_done", "milestones_total"):
+        for key in ("milestones_done", "milestones_total", "obligations_done", "obligations_total"):
             if type(p.get(key)) is not int:
                 problems.append(f"{name}: {key} must be an integer")
         urls += [(name, key, p.get(key)) for key in URL_FIELDS]

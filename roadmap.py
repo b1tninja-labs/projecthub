@@ -383,6 +383,7 @@ HAND_OWNED = (
     "pkix",
     "asn1core",
     "itulib",
+    "zimlore",
     "keyproof",
     "localns",
     "trustatlas",

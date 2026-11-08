@@ -58,5 +58,5 @@ def test_every_entry_has_a_known_kind_and_the_reference_libraries_are_in():
     entries = p.entries()
     assert all(e.kind in p.KINDS for e in entries)
     names = {e.name for e in entries}
-    assert {"rfclib", "itulib", "asn1core", "certledger", "pkix"} <= names
+    assert {"rfclib", "itulib", "zimlore", "asn1core", "certledger", "pkix"} <= names
     assert {e.name: e.directory for e in entries}["rfclib"] == "rfclibrary"
