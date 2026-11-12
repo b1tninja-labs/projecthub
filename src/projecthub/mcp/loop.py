@@ -443,6 +443,8 @@ def _stop(
 
 LEASE_COMMAND = "projecthub leases"
 NO_WORK_EXIT = 3
+# The caller already holds as many live leases as it may: finish, park or block that one first.
+BUSY_EXIT = 4
 PICK_ATTEMPTS = 25
 
 
@@ -572,6 +574,12 @@ def run_pickup(
         try:
             lease = store.acquire(project, row_id, who)
         except lease_store.LeaseError as error:
+            if error.code == "HOLDER_BUSY":
+                return BUSY_EXIT, (
+                    f"BUSY: {error}\n"
+                    "Finish that row, or end it with `projecthub leases release`, `park` or `block`, "
+                    "then run pickup again."
+                )
             if error.code != "LEASE_HELD":
                 raise
             excluded.add(key)

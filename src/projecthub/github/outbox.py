@@ -94,7 +94,9 @@ class OutboxStore(Protocol):
 
     def pending(self, limit: int) -> list[dict[str, Any]]: ...
 
-    def mark_done(self, id: int) -> None: ...
+    def mark_done(self, id: int, payload: dict[str, Any] | None = None) -> object:
+        """Mark an entry delivered. Given the payload that was sent, a store whose entry has since been merged
+        with a newer update keeps it pending, so that update is not lost."""
 
     def retry_later(self, id: int, delay_s: float) -> None: ...
 
@@ -358,7 +360,7 @@ class Drain:
 
     def done(self, entry: dict[str, Any]) -> None:
         if not self.dry_run:
-            self.store.mark_done(int(entry["id"]))
+            self.store.mark_done(int(entry["id"]), entry.get("payload"))
         self.report.done.append(int(entry["id"]))
 
     def retry(self, entry: dict[str, Any], why: str) -> None:

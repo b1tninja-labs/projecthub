@@ -14,6 +14,9 @@ EXPECTED = {
         "forge_packet",
         "forge_propose_status",
         "forge_status",
+        "graph",
+        "plan",
+        "query",
     ],
     "work": [
         "forge_block",
@@ -21,6 +24,11 @@ EXPECTED = {
         "forge_lease_heartbeat",
         "forge_lease_release",
         "forge_leases",
+        "log",
+        "note",
+        "park",
+        "propose",
+        "submit",
     ],
     "projects": [
         "item_context",

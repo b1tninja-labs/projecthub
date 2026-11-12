@@ -38,13 +38,16 @@ class FakeStore:
         ]
         self.done: list[int] = []
         self.retried: list[tuple[int, float]] = []
+        self.delivered: list[dict[str, Any] | None] = []
 
     def pending(self, limit: int) -> list[dict[str, Any]]:
         gone = set(self.done) | {i for i, _ in self.retried}
         return [e for e in self.entries if e["id"] not in gone][:limit]
 
-    def mark_done(self, id: int) -> None:
+    def mark_done(self, id: int, payload: dict[str, Any] | None = None) -> bool:
         self.done.append(id)
+        self.delivered.append(payload)
+        return True
 
     def retry_later(self, id: int, delay_s: float) -> None:
         self.retried.append((id, delay_s))
@@ -318,3 +321,18 @@ def test_dry_run_writes_nothing_and_says_what_it_would_write():
     report = run(store, client, dry_run=True)
     assert client.writes == [] and store.done == [] and store.retried == []
     assert any("would set" in line and "Agent" in line for line in report.lines())
+
+
+def test_a_newer_update_merged_mid_run_is_not_lost(tmp_path):
+    """The drain hands back the payload it sent, so the real store keeps an entry pending when a later
+    event was merged into it after pending() read it."""
+    from projecthub.mcp.work import Store
+
+    store = Store(tmp_path / "l.db")
+    lease = store.acquire("alpha", "row", holder="a")
+    [entry] = store.pending(10)
+    store.note(lease.lease_id, "progress", "local text")
+    assert store.mark_done(int(entry["id"]), entry["payload"]) is False
+    [still] = store.pending(10)
+    assert still["id"] == entry["id"]
+    assert "note:progress" in str(still["payload"]["fields"]["Last activity"])

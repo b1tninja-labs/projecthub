@@ -557,3 +557,18 @@ def _one_repository_per_project(monkeypatch):
     import projecthub.github.sync as sync_module
 
     monkeypatch.setattr(sync_module, "ISSUE_REPO", "")
+
+
+class BusyClaims(Claims):
+    """A store whose caller already holds its one live lease."""
+
+    def acquire(self, project: str, row: str, who: str) -> types.SimpleNamespace:
+        from projecthub.mcp import work
+
+        raise work.LeaseError("HOLDER_BUSY", f"{who} already holds pkix:other")
+
+
+def test_a_holder_with_a_live_lease_is_told_so_rather_than_given_a_traceback():
+    code, text = pickup(BOARD_CARDS, BusyClaims())
+    assert code == loop.BUSY_EXIT
+    assert text.startswith("BUSY: HOLDER_BUSY") and "park" in text
