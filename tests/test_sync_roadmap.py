@@ -512,3 +512,16 @@ def _one_repository_per_project(monkeypatch):
     import projecthub.github.sync as sync_module
 
     monkeypatch.setattr(sync_module, "ISSUE_REPO", "")
+
+
+def test_a_row_with_no_spec_and_no_summary_gets_a_title_with_no_dangling_colon():
+    import projecthub.github.sync as sync
+
+    assert (
+        sync.issue_title("kconfigpy", {"title": "rev.crc", "spec": ""}, "")
+        == "[kconfigpy] rev.crc"
+    )
+    assert (
+        sync.issue_title("pkix", {"title": "a.b()", "spec": "RFC 5280"}, "")
+        == "[pkix] a.b(): RFC 5280"
+    )

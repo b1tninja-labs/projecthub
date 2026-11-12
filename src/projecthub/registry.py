@@ -119,6 +119,15 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "generator, gates and planning tools",
         "PORTFOLIO.md s3 'Tooling'",
     ),
+    # Decided 2026-11-12: a tool for the router firmware build, not a library the portfolio depends on.
+    "kconfigpy": (
+        "Tooling",
+        3,
+        0,
+        "kconfigpy",
+        "explainable Kconfig analysis: a minimal kernel config from hardware, with a reason for every option",
+        "decided 2026-11-12: tier 3, unsequenced, not active",
+    ),
 }
 
 

@@ -538,7 +538,8 @@ def detail_of(
 def issue_title(name: str, row: dict[str, str], summary: str) -> str:
     """`[pkix] anchors.load_anchor(): trust anchor selection`. The repository is in the title because a
     board row drawn from many repositories is otherwise anonymous."""
-    return f"[{name}] {row['title']}: {summary or row['spec']}"
+    tail = summary or row["spec"]
+    return f"[{name}] {row['title']}: {tail}" if tail else f"[{name}] {row['title']}"
 
 
 def same_text(a: str, b: str) -> bool:
