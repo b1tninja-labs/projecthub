@@ -16,8 +16,6 @@ python -m pytest -q
 
 Run `projecthub pickup --who <your name>`. Its output is your assignment: one row, already claimed for you, with
 the commands that prove it and the ways to end it. `NO WORK` is a real answer: ask the person what to work on.
-Until the portfolio's issues reach the organization Project, the live command is `python sdk-forge/loop.py pickup`
-in the `D:\code` workspace, and `projecthub pickup` reports `NO WORK`.
 
 To reach the planning tools over MCP, register `projecthub mcp`; [docs/agents.md](docs/agents.md) has the config
 for Claude Code, Continue and Cline.
@@ -26,7 +24,7 @@ for Claude Code, Continue and Cline.
 
 `projecthub shells` generates the protocol SDK shells in the workspace, runs the five gates across them, and
 is the pre-commit hook the workspace uses (`projecthub shells generate --dry-run`, `projecthub shells verify`).
-It replaces sdk-forge; see [docs/shells.md](docs/shells.md).
+It is the generator that used to be the separate sdk-forge tool; see [docs/shells.md](docs/shells.md).
 
 Status: early. The design and the decisions behind it are recorded in the portfolio's PORTFOLIO.md, section 9,
 items 10 and 11.

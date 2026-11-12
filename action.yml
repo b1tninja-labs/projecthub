@@ -3,9 +3,9 @@ description: >-
   Check a project's ROADMAP.md against the callables its rows name, and against the GitHub issues
   derived from it. Read-only: this action never creates, comments, closes or pushes.
 
-# Consumed as `uses: b1tninja/sdk-forge@main`. The consuming workflow is expected to have already
-# checked its own project out; FORGE_ROOT is pointed at the parent of that checkout so the project
-# name resolves to a directory. Rows and issues are matched on a marker in each issue body, so a
+# Consumed as `uses: b1tninja-labs/projecthub@main`. The consuming workflow is expected to have already
+# checked its own project out; `projecthub sync --root` is pointed at a directory that holds it under
+# the project's name, so the project name resolves to a directory. Rows and issues are matched on a marker in each issue body, so a
 # re-run is a no-op rather than a duplicate.
 
 inputs:
@@ -40,10 +40,10 @@ runs:
     - name: Roadmap and issues must agree
       env:
         GH_TOKEN: ${{ inputs.token }}
-        FORGE_PROJECT: ${{ inputs.project }}
+        PROJECTHUB_PROJECT: ${{ inputs.project }}
       run: |
         set -eu
-        project="${FORGE_PROJECT:-$(basename "$GITHUB_WORKSPACE")}"
+        project="${PROJECTHUB_PROJECT:-$(basename "$GITHUB_WORKSPACE")}"
         # --root expects <root>/<project>/ROADMAP.md. The runner's layout is a convention, not a
         # contract, so the shape is built rather than inferred from the checkout path.
         root=$(mktemp -d)

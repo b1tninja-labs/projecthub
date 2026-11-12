@@ -17,22 +17,21 @@ and says which ones. Decide on purpose, then commit again with PROJECTHUB_ALLOW_
 from __future__ import annotations
 
 import argparse
-import os
 import pathlib
 import re
 import subprocess
 import sys
 from collections import Counter
 
+from projecthub import paths
+
 # probe_* was the shape scratch actually took here; .log/.out/.err were the redirection targets that got
 # committed. Anything matching is refused on the way in, and only reported (not refused) if a commit
 # adds nothing new to it.
 SCRATCH_RE = re.compile(r"(?:^|/)(?:probe_[^/]+\.py|[^/]+\.(?:log|out|err|diff))$")
 HEADING_RE = re.compile(r"^#{1,6} \S.*$", re.MULTILINE)
-# PROJECTHUB_ALLOW_HEADING_LOSS is the name to use; FORGE_ALLOW_HEADING_LOSS is still read after it, because
-# commands and notes written before the move spell it that way.
+# Read through projecthub.paths.env, so the spelling commands and notes used before the rename still works.
 ALLOW = "PROJECTHUB_ALLOW_HEADING_LOSS"
-LEGACY_ALLOW = "FORGE_ALLOW_HEADING_LOSS"
 
 
 def git(args: list[str], cwd: pathlib.Path) -> str:
@@ -81,7 +80,7 @@ def heading_regression(before: str, after: str) -> list[str]:
 def check(cwd: pathlib.Path) -> list[str]:
     """Every reason this staged state should not become a commit."""
     problems: list[str] = []
-    if not (os.environ.get(ALLOW) or os.environ.get(LEGACY_ALLOW)):
+    if not paths.env("ALLOW_HEADING_LOSS"):
         for path in staged_markdown(cwd):
             before = git(["show", f"HEAD:{path}"], cwd)
             if not before:
@@ -100,8 +99,7 @@ HOOK = """#!/bin/sh
 # Installed by `projecthub shells hygiene --install`; it lives in src/projecthub/shells/githooks of a
 # projecthub checkout, and the workspace points core.hooksPath at that directory.
 # Stops a commit that deletes a markdown heading by accident or adds scratch to the tree.
-# Escape hatch: git commit --no-verify, or PROJECTHUB_ALLOW_HEADING_LOSS=1 for the heading check only
-# (the older FORGE_ALLOW_HEADING_LOSS=1 is still honoured).
+# Escape hatch: git commit --no-verify, or PROJECTHUB_ALLOW_HEADING_LOSS=1 for the heading check only.
 
 # A path the interpreter can read: MSYS sh on Windows prints /d/code, which python does not understand,
 # and `pwd -W` gives D:/code there. Elsewhere `pwd -W` fails and plain `pwd` is the answer.

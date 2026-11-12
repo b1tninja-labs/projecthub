@@ -134,14 +134,14 @@ def test_mcp_tools_are_four_read_only_tools_with_output_schemas():
     _, tools = _tools()
     names = sorted(t.name for t in tools)
     assert names == [
-        "forge_context",
-        "forge_next",
-        "forge_packet",
-        "forge_propose_status",
-        "forge_status",
+        "context",
         "graph",
+        "next",
+        "packet",
         "plan",
+        "propose_status",
         "query",
+        "status",
     ]
     for tool in tools:
         assert (
@@ -163,7 +163,7 @@ def test_mcp_tools_cannot_write_roadmap(workspace):
         assert "write" not in params, f"{tool.name} takes a write flag"
     preview = anyio.run(
         app.call_tool,
-        "forge_propose_status",
+        "propose_status",
         {"project": "pkix", "row": "x.y", "status": "[part]"},
     )
     assert preview.structured_content["would_write"] is True
@@ -182,7 +182,7 @@ def test_a_refusal_is_an_error_not_a_success_that_reads_refused(workspace):
     with pytest.raises(ToolError, match="REFUSED"):
         anyio.run(
             app.call_tool,
-            "forge_propose_status",
+            "propose_status",
             {"project": "pkix", "row": "a.b", "status": "[ok]"},
         )
 

@@ -1,6 +1,6 @@
 """Project each SDK's obligation matrix onto GitHub issues, and report when the two disagree.
 
-Why this lives in the forge and not in a project. Filing a project's plan is not part of that project's
+Why this lives in projecthub and not in a project. Filing a project's plan is not part of that project's
 product, and a library repo that carries the tooling publishing its roadmap ends up holding credentials
 it has no reason to hold. One tool over every project also means one place where the roadmap shapes are
 understood, instead of eighteen copies fixing the same bug differently.
@@ -28,19 +28,18 @@ Safety, because this writes to many repositories at once:
   direction (an open row whose issue is closed, a done row whose issue is open, a milestone mismatch, a
   row with no issue, an issue with no row, a read that failed) while writing nothing.
 
-The Project V2 board is board.py's, not this tool's.
+The Project V2 board is `projecthub board`'s, not this tool's.
 
 Usage:
-    py sync_roadmap.py                              # every synced project, plan only
-    py sync_roadmap.py --project pkix --apply
-    py sync_roadmap.py --check
+    projecthub sync                              # every synced project, plan only
+    projecthub sync --project pkix --apply
+    projecthub sync --check
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import pathlib
 import re
 import shutil
@@ -51,6 +50,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
+from projecthub import paths
 from projecthub import registry as portfolio
 from projecthub.db import parser as roadmap
 from projecthub.github import rowdoc
@@ -80,9 +80,9 @@ LABELS = {
 # A read that returns exactly this many items may have been cut off, and is refused rather than trusted.
 ISSUE_LIMIT = 1000
 # Every roadmap issue lives in one repository, so the portfolio is read in one place (PORTFOLIO.md decision 11).
-# A project's issues are the ones whose title starts with `[project]`. Set FORGE_ISSUE_REPO empty for the old
-# layout, one repository per project.
-ISSUE_REPO = os.environ.get("FORGE_ISSUE_REPO", "b1tninja-labs/portfolio")
+# A project's issues are the ones whose title starts with `[project]`. Set PROJECTHUB_ISSUE_REPO empty for the
+# old layout, one repository per project.
+ISSUE_REPO = paths.env("ISSUE_REPO", "b1tninja-labs/portfolio", keep_empty=True)
 
 
 def shared() -> bool:
@@ -787,8 +787,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--org",
-        default=os.environ.get("FORGE_ORG") or "b1tninja",
-        help="owner for a project whose checkout has no remote (FORGE_ORG)",
+        default=paths.env("ORG", "b1tninja"),
+        help="owner for a project whose checkout has no remote (PROJECTHUB_ORG)",
     )
     parser.add_argument(
         "--apply",
@@ -800,8 +800,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--root",
-        default=os.environ.get("FORGE_ROOT", "D:/code"),
-        help="directory the project checkouts live in (FORGE_ROOT in CI)",
+        default=paths.env("ROOT", "D:/code"),
+        help="directory the project checkouts live in (PROJECTHUB_ROOT in CI)",
     )
     parser.add_argument(
         "--delay",
@@ -821,12 +821,12 @@ def main(argv: list[str] | None = None) -> int:
         default=450,
         help=f"writes before the run stops early, at most {GITHUB_PER_HOUR} (default 450)",
     )
-    # Removed: board.py owns the Project V2 board. Kept as a flag only to say so instead of "unrecognized".
+    # Removed: `projecthub board` owns the Project V2 board. Kept as a flag only to say so instead of "unrecognized".
     parser.add_argument("--board", nargs="?", const="", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.board is not None:
         parser.error(
-            "--board was removed: board.py owns the board (board.py --number 4)"
+            "--board was removed: `projecthub board` owns the board (projecthub board --number 4)"
         )
     if args.apply and args.check:
         parser.error("--apply and --check are exclusive: --check writes nothing")

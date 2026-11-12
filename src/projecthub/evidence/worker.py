@@ -15,8 +15,8 @@ it failed with the reason, in the same transaction that stores the verdict, so t
 
     projecthub evidence-worker [--once] [--root PATH] [--db PATH] [--timeout SECONDS]
 
-The lease database is PROJECTHUB_LEASES_DB, else FORGE_LEASES_DB, else leases.sqlite in the state
-directory; the root is PROJECTHUB_ROOT, else FORGE_ROOT, else the workspace default.
+The lease database is PROJECTHUB_LEASES_DB, else leases.sqlite in the state directory; the root is
+PROJECTHUB_ROOT, else the workspace default.
 """
 
 from __future__ import annotations
@@ -96,12 +96,12 @@ class Verdict:
 
 
 def default_db() -> pathlib.Path:
-    named = os.environ.get("PROJECTHUB_LEASES_DB") or os.environ.get("FORGE_LEASES_DB")
+    named = paths.env("LEASES_DB")
     return pathlib.Path(named) if named else paths.state_dir() / "leases.sqlite"
 
 
 def default_root() -> pathlib.Path:
-    named = os.environ.get("PROJECTHUB_ROOT") or os.environ.get("FORGE_ROOT")
+    named = paths.env("ROOT")
     return pathlib.Path(named) if named else paths.ROOT
 
 

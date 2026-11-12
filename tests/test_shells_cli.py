@@ -17,7 +17,7 @@ import tomllib
 
 import pytest
 
-from projecthub import cli
+from projecthub import cli, paths
 from projecthub.shells import cli as shells_cli
 from projecthub.shells import generate, hygiene
 
@@ -191,7 +191,7 @@ def test_the_generator_finds_its_data_beside_it():
     assert generate.LICENSE_SRC.is_file()
     assert (PKG / "templates" / "index.md.tpl").is_file()
     assert (PKG / "templates" / "rust" / "Cargo.toml.tpl").is_file()
-    if not (os.environ.get("PROJECTHUB_MANIFEST") or os.environ.get("FORGE_MANIFEST")):
+    if not paths.env("MANIFEST"):
         assert generate.MANIFEST == PKG / "data" / "generated.json"
 
 

@@ -1,19 +1,14 @@
 """One MCP entry point: `projecthub mcp --toolset read|work|projects` serves that server on stdio.
 
 `read` is the default and only reads. `work` is opt-in because its tools write the local lease store
-(FORGE_LEASES_DB). `projects` reads GitHub Projects through `gh`; PROJECTS_MCP_TOOLSETS still selects its
+(PROJECTHUB_LEASES_DB). `projects` reads GitHub Projects through `gh`; PROJECTS_MCP_TOOLSETS still selects its
 groups. Each server is built by its own module's `build()`; this module only chooses one and runs it.
-
-The servers still read FORGE_ROOT and FORGE_LEASES_DB. PROJECTHUB_ROOT and PROJECTHUB_LEASES_DB are read
-first and, when set, win: `build` copies them over the old names before it imports a server module, which
-reads them at import time.
 """
 
 from __future__ import annotations
 
 import argparse
 import importlib
-import os
 import sys
 from typing import Any
 
@@ -23,23 +18,11 @@ TOOLSETS = {
     "projects": "projecthub.github.projects_mcp",
 }
 DEFAULT = "read"
-# The projecthub name, then the name the server modules still read.
-ENV_ALIASES = {
-    "PROJECTHUB_ROOT": "FORGE_ROOT",
-    "PROJECTHUB_LEASES_DB": "FORGE_LEASES_DB",
-}
 MISSING_MCP = (
-    "the MCP servers need the mcp extra: pip install 'projecthub[mcp]', or with uvx: "
-    "uvx --from 'projecthub[mcp] @ git+https://github.com/b1tninja-labs/projecthub' projecthub mcp"
+    "the MCP servers need the mcp package, a dependency of projecthub that is not installed here: "
+    "pip install git+https://github.com/b1tninja-labs/projecthub, or run it with "
+    "uvx --from git+https://github.com/b1tninja-labs/projecthub projecthub mcp"
 )
-
-
-def bridge_env(environ: dict[str, str] | None = None) -> None:
-    """Copy each PROJECTHUB_* variable that is set over the FORGE_* variable the servers read."""
-    env = os.environ if environ is None else environ
-    for new, old in ENV_ALIASES.items():
-        if env.get(new):
-            env[old] = env[new]
 
 
 def build(toolset: str = DEFAULT) -> Any:
@@ -48,7 +31,6 @@ def build(toolset: str = DEFAULT) -> Any:
         raise ValueError(
             f"unknown toolset {toolset!r}; choose one of {', '.join(TOOLSETS)}"
         )
-    bridge_env()
     return importlib.import_module(TOOLSETS[toolset]).build()
 
 

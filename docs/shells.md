@@ -40,15 +40,16 @@ generator finds them beside `generate.py`.
 
 ## Environment
 
-The workspace root is `projecthub.paths.ROOT`: `PROJECTHUB_ROOT`, else `FORGE_ROOT`, else `D:/code`. Every
-variable this package introduces is read under its `PROJECTHUB_` name first and its old `FORGE_` name second:
+The workspace root is `projecthub.paths.ROOT`: `PROJECTHUB_ROOT`, else `D:/code`. Each variable is read
+through `projecthub.paths.env`; [agents.md](agents.md#names-from-before-the-rename) lists the names they had
+before the rename, which are still read as fallbacks.
 
-| Variable | Falls back to | What it does |
-|----------|---------------|--------------|
-| `PROJECTHUB_ROOT` | `FORGE_ROOT` | the workspace the shells live in |
-| `PROJECTHUB_MANIFEST` | `FORGE_MANIFEST` | where the generator records what it last wrote |
-| `PROJECTHUB_ALLOW_HEADING_LOSS` | `FORGE_ALLOW_HEADING_LOSS` | let a commit delete a markdown heading on purpose |
-| `PROJECTHUB_SRC` | (the checkout the hook sits in) | the `src` directory the hook imports projecthub from |
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `PROJECTHUB_ROOT` | `D:/code` | the workspace the shells live in |
+| `PROJECTHUB_MANIFEST` | `data/generated.json` | where the generator records what it last wrote |
+| `PROJECTHUB_ALLOW_HEADING_LOSS` | unset | let a commit delete a markdown heading on purpose |
+| `PROJECTHUB_SRC` | the checkout the hook sits in | the `src` directory the hook imports projecthub from |
 
 `VERIFY_TIMEOUT` (seconds per gate, default 900) and `PYTHON` (the interpreter the hook uses) keep their names.
 

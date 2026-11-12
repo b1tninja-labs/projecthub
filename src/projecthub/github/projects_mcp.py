@@ -1,7 +1,7 @@
 """A read-only MCP interface to GitHub Projects (v2), with a portfolio overview on top.
 
 Why read-only. The board is a projection of ROADMAP.md and PORTFOLIO.md, and every write path that could
-move it (sync_roadmap.py, board.py, planner.py's status and claim commands) checks evidence first. An MCP
+move it (`projecthub sync`, `projecthub board`, the planner's status and claim commands) checks evidence first. An MCP
 write tool would let an agent drag a card to Done with nothing behind it, so writes stay in those CLIs
 (the MCP-writes decision, docs/research-mcp-planning-quality.md slice 1). What an agent needs from the board is the read side, and the read side is where GitHub's own
 MCP server is thinnest: titles only unless field ids are passed, no hierarchy, no dependency links, no
@@ -11,8 +11,8 @@ Two toolsets, selected with PROJECTS_MCP_TOOLSETS (default "projects,portfolio")
 
 - projects: generic and owner-agnostic - auth, list, schema, items with field filters, and one item's full
   context (parent, sub-issues and their progress, blocked-by and blocking, board fields). This half has no
-  knowledge of the forge and is the part that can leave as its own package.
-- portfolio: reads the Level / State / Active / Wave fields board.py lays out, and answers "where does the
+  knowledge of projecthub's portfolio and is the part that can leave as its own package.
+- portfolio: reads the Level / State / Active / Wave fields `projecthub board` lays out, and answers "where does the
   portfolio stand": items per level, waves and their projects, open decisions, what is blocked, and whether
   the two-active-projects rule holds.
 
@@ -21,8 +21,8 @@ structuredContent with a text mirror; a failure is an isError result naming the 
 success; lists come back in a stable order; and any connection capped at one page says so with a
 `truncated` flag instead of silently dropping the rest.
 
-Run: python projects_mcp.py   (speaks MCP on stdio; register it with: claude mcp add gh-projects -- python
-D:/code/sdk-forge/projects_mcp.py)
+Run: projecthub mcp --toolset projects   (speaks MCP on stdio; register it with: claude mcp add gh-projects --
+projecthub mcp --toolset projects)
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ INSTRUCTIONS = (
     "Read-only views of GitHub Projects boards. The portfolio board (default owner and number) is a projection "
     "of PORTFOLIO.md and each repository's ROADMAP.md, laid out as Wave -> Project -> Milestone -> Obligation "
     "with a Level field. Nothing here changes the board: to move work, change the source file and run "
-    "sdk-forge/sync_roadmap.py or board.py, or the sdk-forge planner's status and claim commands. Treat a "
+    "`projecthub sync` or `projecthub board`, or the projecthub planner's status and claim commands. Treat a "
     "card's Status as a claim, not evidence: a row is done only when its ROADMAP row reads [ok] with a named "
     "test. When a result says truncated, the list is incomplete: say so rather than reasoning from it."
 )

@@ -10,10 +10,11 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 authors = [{ name = "Justin Capella" }]
-dependencies = ["coverage>=7.6"]
+dependencies = ["coverage>=7.6", "mcp>=2.3,<3"]
 
 [project.optional-dependencies]
-mcp = ["mcp>=2.3,<3"]
+# mcp is a core dependency now. The extra stays, empty, so `projecthub[mcp]` in older install lines resolves.
+mcp = []
 dev = ["ruff==0.15.12", "mypy==1.20.2", "pytest==9.0.3", "mcp==2.3.0", "coverage==7.17.0", "anyio"]
 
 [project.scripts]

@@ -7,7 +7,7 @@ labs.b1tninja.com used to show a snapshot committed by hand. This builds the sam
 - Project 1 adds what only it knows: a row someone claimed shows In progress or Blocked, and each claim is an
   activity entry. Activity is public, so it carries its kind and time only (the owner's decision, 2026-11-08).
 
-    projecthub site --out data            # FORGE_ROOT points at a workspace, such as projecthub checkout's
+    projecthub site --out data            # PROJECTHUB_ROOT points at a workspace, such as projecthub checkout's
     projecthub site --out data --no-project
 
 The contract is DATA.md in the site repository. A file that would break it is refused before anything is written.

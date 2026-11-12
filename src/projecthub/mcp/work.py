@@ -6,9 +6,9 @@ tell two agents apart: the second one read "already yours". A lease is a server-
 take it, and a lease that misses its heartbeat expires by itself, so a crashed agent cannot hold a row
 forever. The assignee and issue comments may mirror a lease for people to see; they never decide it.
 
-Where it lives. A SQLite file in sdk-forge/cache/ (gitignored), acquired inside BEGIN IMMEDIATE so two
+Where it lives. A SQLite file in the machine's state directory (paths.state_dir), acquired inside BEGIN IMMEDIATE so two
 agents racing for one row get exactly one lease. It writes nothing else: not ROADMAP.md, not GitHub.
-That is why this is its own opt-in MCP server (`forge-lease`) rather than tools on the read-only planner:
+That is why this is its own opt-in MCP server (`projecthub-work`) rather than tools on the read-only planner:
 a client that registers only the planner cannot reach a write of any kind.
 
 State: live -> released (handoff / pr_opened / abandoned / parked) | expired | blocked. A block of the same
@@ -40,7 +40,6 @@ from projecthub import paths
 
 import argparse
 import json
-import os
 import pathlib
 import re
 import sqlite3
@@ -159,11 +158,7 @@ class Store:
     def __init__(
         self, path: pathlib.Path | None = None, now: Callable[[], float] = time.time
     ) -> None:
-        self.path = path or pathlib.Path(
-            os.environ.get("PROJECTHUB_LEASES_DB")
-            or os.environ.get("FORGE_LEASES_DB")
-            or DEFAULT_DB
-        )
+        self.path = path or pathlib.Path(paths.env("LEASES_DB") or DEFAULT_DB)
         self.now = now
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
@@ -798,14 +793,14 @@ INSTRUCTIONS = (
 
 
 def build(store: Store | None = None, ready: Callable[[str, str], str] | None = None):  # type: ignore[no-untyped-def]
-    """The forge-lease server. `ready(project, row_id)` returns "" if the row may be leased, else why not."""
+    """The projecthub-work server. `ready(project, row_id)` returns "" if the row may be leased, else why not."""
     from mcp.server.mcpserver import MCPServer
     from mcp.server.mcpserver.exceptions import ToolError
     from mcp.types import ToolAnnotations
 
     leases = store or Store()
     check = ready or _ready_from_planner
-    app = MCPServer(name="forge-lease", instructions=INSTRUCTIONS)
+    app = MCPServer(name="projecthub-work", instructions=INSTRUCTIONS)
     write = ToolAnnotations(
         read_only_hint=False,
         destructive_hint=False,
@@ -826,6 +821,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
             raise ToolError(str(error)) from error
 
     @app.tool(
+        name="claim",
         description=(
             f"Lease a ready row. TTL defaults to {DEFAULT_TTL}s and is capped at {MAX_TTL}s; heartbeat before it "
             "runs out. Refuses a row that is not ready (inactive project, plan directory, unbuilt dependency) or "
@@ -834,7 +830,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         annotations=write,
         structured_output=True,
     )
-    def forge_lease_acquire(
+    def claim_tool(
         project: str,
         row_id: str,
         holder: str = "agent",
@@ -859,22 +855,24 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         }
 
     @app.tool(
+        name="heartbeat",
         description="Extend a live lease by its TTL. An expired lease is an error: LEASE_EXPIRED.",
         annotations=write,
         structured_output=True,
     )
-    def forge_lease_heartbeat(lease_id: str) -> HeartbeatOut:
+    def heartbeat_tool(lease_id: str) -> HeartbeatOut:
         return {
             "lease_id": lease_id,
             "expires_at": _iso(guarded(lambda: leases.heartbeat(lease_id))),
         }
 
     @app.tool(
+        name="release",
         description="End a lease: outcome handoff, pr_opened (needs pr_url), abandoned or parked (needs a note). The row is free again.",
         annotations=write,
         structured_output=True,
     )
-    def forge_lease_release(
+    def release_tool(
         lease_id: str, outcome: str, note: str = "", pr_url: str = ""
     ) -> ReleaseOut:
         return {
@@ -883,6 +881,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         }
 
     @app.tool(
+        name="block",
         description=(
             "Mark a leased row blocked: kind dependency, spec_question, decision_needed or env, with what blocks it. "
             "needs_a_person=true means stop: the same block recurred, or a decision is required."
@@ -890,15 +889,16 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         annotations=write,
         structured_output=True,
     )
-    def forge_block(lease_id: str, kind: str, detail: str) -> BlockOut:
+    def block_tool(lease_id: str, kind: str, detail: str) -> BlockOut:
         return guarded(lambda: leases.block(lease_id, kind, detail))  # type: ignore[no-any-return]
 
     @app.tool(
+        name="leases",
         description="Live leases and the most recent lease events.",
         annotations=read,
         structured_output=True,
     )
-    def forge_leases(row_key: str = "", limit: int = 20) -> LeasesOut:
+    def leases_tool(row_key: str = "", limit: int = 20) -> LeasesOut:
         return {
             "live": [
                 {
@@ -990,7 +990,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
 
 
 def _ready_from_planner(project: str, row_id: str) -> str:
-    """Empty if forge_next would list the row, else the reason it is held back."""
+    """Empty if the read server's next would list the row, else the reason it is held back."""
     from projecthub.mcp import read as planner
 
     try:

@@ -1,6 +1,6 @@
 """What a person or agent needs to know to pick up one ROADMAP row, assembled from files that already exist.
 
-The first issues this forge filed were a title, a spec name and a boilerplate paragraph. That told a reader
+The first issues the sync filed were a title, a spec name and a boilerplate paragraph. That told a reader
 neither which repository the work was in, nor what the function is for, nor which milestone it serves, nor
 whether the test it names exists. Every one of those facts is already on disk; nothing here invents text.
 

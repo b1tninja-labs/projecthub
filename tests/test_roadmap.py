@@ -12,6 +12,7 @@ import pathlib
 
 import pytest
 
+from projecthub import paths
 from projecthub.db import parser as r
 from projecthub.data import PROJECTS
 
@@ -382,7 +383,7 @@ def test_a_bare_test_name_is_looked_up_by_exact_name_under_tests(project):
 
 # ------------------------------------------------------------------------------------- the real workspace
 
-ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
+ROOT = pathlib.Path(paths.env("ROOT", "D:/code"))
 REAL = list(dict.fromkeys([*PROJECTS, *r.HAND_OWNED, "namespy"]))
 
 
@@ -390,7 +391,7 @@ def test_every_real_matrix_file_parses_with_no_unparsable_row_lines():
     """Every ROADMAP.md, PLAN.md and docs/roadmap.md of the portfolio's matrix projects, read from disk."""
     present = [p for p in REAL if r.project_dir(ROOT, p).is_dir()]
     if not present:
-        pytest.skip(f"no portfolio checkout under {ROOT}; set FORGE_ROOT")
+        pytest.skip(f"no portfolio checkout under {ROOT}; set PROJECTHUB_ROOT")
     problems: list[str] = []
     found = 0
     for project in present:

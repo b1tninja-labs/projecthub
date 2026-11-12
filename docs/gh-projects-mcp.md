@@ -1,4 +1,8 @@
-# A GitHub Projects interface for the forge
+# A GitHub Projects interface for projecthub
+
+> Written before the rename, when this system was sdk-forge, and kept as the record it was. Tool, script,
+> server and variable names below are the old ones; [agents.md](agents.md#names-from-before-the-rename)
+> maps them to the current ones.
 
 Status: built, and registered with the Cline CLI. Corrected 2026-11-07 by the change that added `loop.py`. The
 sections below keep the original reasoning and the measured API facts, which are still what the design rests on;

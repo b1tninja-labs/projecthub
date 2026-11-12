@@ -62,7 +62,7 @@ def test_every_view_is_filtered_and_built_from_real_field_ids():
 
 
 ENTRY = p.Entry(
-    "pkix", "Library", 2, 2, "pkix", "", "forge.POSITION", ("asn1core", "rpkit")
+    "pkix", "Library", 2, 2, "pkix", "", "shells POSITION", ("asn1core", "rpkit")
 )
 STATE = p.State(
     "Shell", 12, 0, "ROADMAP.md", "", "Certification path validation per RFC 5280."
@@ -536,9 +536,7 @@ def test_the_board_is_chosen_by_number_and_defaults_to_the_configured_one(
     world.run("--apply")
     world.client.writes.clear()
     assert b.main(["--check"], client=world.client, issues=world.issues) == 0
-    assert b.BOARD_NUMBER == int(
-        b.os.environ.get("FORGE_BOARD") or b.config.PROJECT_NUMBER
-    )
+    assert b.BOARD_NUMBER == int(b.paths.env("BOARD") or b.config.PROJECT_NUMBER)
 
 
 def test_schema_only_sets_up_the_project_without_reading_the_workspace(
