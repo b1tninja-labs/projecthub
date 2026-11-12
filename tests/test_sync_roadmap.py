@@ -282,7 +282,7 @@ def test_a_project_with_no_repository_is_skipped_by_plan_and_apply_but_not_by_ch
     project.mkdir()
     (project / "ROADMAP.md").write_text(PKIX_ROW + "\n", encoding="utf-8")
     monkeypatch.setattr(s, "repo_exists", lambda repo: False)
-    monkeypatch.setattr(s, "existing", lambda repo, network: {})
+    monkeypatch.setattr(s, "existing", lambda repo, network, **_: {})
     monkeypatch.setattr(
         s, "run", lambda *a, **k: pytest.fail("must not write to a missing repo")
     )
@@ -471,3 +471,44 @@ def test_the_default_set_is_the_shells_plus_every_hand_owned_matrix_once():
     assert len(names) == len(set(names))
     assert set(s.PROJECTS) <= set(names)
     assert set(roadmap.HAND_OWNED) <= set(names)
+
+
+def test_in_the_shared_repository_a_project_reads_only_its_own_issues(monkeypatch):
+    import projecthub.github.sync as sync
+
+    monkeypatch.setattr(sync, "ISSUE_REPO", "o/portfolio")
+    listed = [
+        {
+            "number": 1,
+            "title": "[pkix] a.b: x",
+            "body": "<!-- roadmap:a.b -->",
+            "state": "OPEN",
+        },
+        {
+            "number": 2,
+            "title": "[ctspy] a.b: y",
+            "body": "<!-- roadmap:a.b -->",
+            "state": "OPEN",
+        },
+    ]
+    monkeypatch.setattr(
+        sync, "read", lambda argv, what: __import__("json").dumps(listed)
+    )
+    got = sync.existing("o/portfolio", True, project="pkix")
+    assert [i["number"] for i in got.values()] == [1], (
+        "the same row id in another project is not this one"
+    )
+    assert sync.issue_home("o/pkix") == "o/portfolio"
+    assert sync.placement({"milestone": "M1"}, {"M1": "first"}) == "", (
+        "milestones would collide in one repo"
+    )
+    monkeypatch.setattr(sync, "ISSUE_REPO", "")
+    assert sync.issue_home("o/pkix") == "o/pkix" and sync.owned_by("[ctspy] x", "pkix")
+
+
+@pytest.fixture(autouse=True)
+def _one_repository_per_project(monkeypatch):
+    """These tests describe the per-project layout. The shared repository has tests of its own."""
+    import projecthub.github.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "ISSUE_REPO", "")

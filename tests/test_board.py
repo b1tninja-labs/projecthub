@@ -552,3 +552,11 @@ def test_schema_only_sets_up_the_project_without_reading_the_workspace(
     assert world.client.writes == [], (
         "a complete schema needs no repair, and no card was touched"
     )
+
+
+@pytest.fixture(autouse=True)
+def _one_repository_per_project(monkeypatch):
+    """These tests describe the per-project layout. The shared repository has tests of its own."""
+    import projecthub.github.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "ISSUE_REPO", "")

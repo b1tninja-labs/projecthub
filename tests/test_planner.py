@@ -439,3 +439,11 @@ def test_a_packet_refuses_plan_directories_unknown_and_ambiguous_rows(
     with pytest.raises(LookupError, match="no project"):
         p.packet("nope:a.x", root=workspace)
     assert p.packet("beta:a.x", root=workspace)["project"] == "beta"
+
+
+@pytest.fixture(autouse=True)
+def _one_repository_per_project(monkeypatch):
+    """These tests describe the per-project layout. The shared repository has tests of its own."""
+    import projecthub.github.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "ISSUE_REPO", "")

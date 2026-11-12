@@ -41,7 +41,7 @@ from typing import Any, TypedDict
 
 from projecthub.db import parser as roadmap
 from projecthub.db.parser import rows_of
-from projecthub.github.sync import MARKER, PROJECTS, STATUSES, gh
+from projecthub.github.sync import MARKER, PROJECTS, STATUSES, gh, issue_home, owned_by
 
 # Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
 # this machine's layout into every read and write; the planner's own tests discovered that by passing
@@ -99,14 +99,20 @@ def portfolio_status(with_issues: bool = True) -> list[dict[str, object]]:
                     "issue",
                     "list",
                     "--repo",
-                    f"{ORG}/{name}",
+                    issue_home(f"{ORG}/{name}"),
                     "--state",
                     "open",
+                    "--limit",
+                    "1000",
                     "--json",
-                    "number",
+                    "number,title",
                 ]
             )
-            entry["open_issues"] = len(listed) if isinstance(listed, list) else listed
+            entry["open_issues"] = (
+                sum(1 for i in listed if owned_by(str(i.get("title", "")), name))
+                if isinstance(listed, list)
+                else listed
+            )
         out.append(entry)
     return out
 
@@ -380,7 +386,7 @@ def _assignees(repo: str, number: str) -> list[str] | str:
 
 def claim(project: str, name: str, who: str) -> str:
     """Assign the row's issue to `who`, refusing if someone else already holds it."""
-    repo = f"{ORG}/{project}"
+    repo = issue_home(f"{ORG}/{project}")
     listed = _gh_json(
         [
             "issue",
@@ -390,7 +396,7 @@ def claim(project: str, name: str, who: str) -> str:
             "--state",
             "open",
             "--limit",
-            "300",
+            "1000",
             "--json",
             "number,title,url,body,assignees",
         ]
@@ -398,7 +404,13 @@ def claim(project: str, name: str, who: str) -> str:
     if not isinstance(listed, list):
         return f"could not read issues: {listed}"
     target = next(
-        (i for i in listed if MARKER.format(name) in str(i.get("body", ""))), None
+        (
+            i
+            for i in listed
+            if MARKER.format(name) in str(i.get("body", ""))
+            and owned_by(str(i.get("title", "")), project)
+        ),
+        None,
     )
     if target is None:
         return f"no open issue carries {MARKER.format(name)}; run sync_roadmap --apply first"

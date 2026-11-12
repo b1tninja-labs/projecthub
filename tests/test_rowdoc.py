@@ -210,3 +210,11 @@ def test_the_evidence_check_is_exact_and_ignores_planned_tests(tree):
         tree, "demo-kit", "`tests/test_a.py::test_load` (to be written)"
     )
     assert not ok and "(to be written)" in why
+
+
+@pytest.fixture(autouse=True)
+def _one_repository_per_project(monkeypatch):
+    """These tests describe the per-project layout. The shared repository has tests of its own."""
+    import projecthub.github.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "ISSUE_REPO", "")

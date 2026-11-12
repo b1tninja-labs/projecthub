@@ -79,6 +79,27 @@ LABELS = {
 }
 # A read that returns exactly this many items may have been cut off, and is refused rather than trusted.
 ISSUE_LIMIT = 1000
+# Every roadmap issue lives in one repository, so the portfolio is read in one place (PORTFOLIO.md decision 11).
+# A project's issues are the ones whose title starts with `[project]`. Set FORGE_ISSUE_REPO empty for the old
+# layout, one repository per project.
+ISSUE_REPO = os.environ.get("FORGE_ISSUE_REPO", "b1tninja-labs/portfolio")
+
+
+def shared() -> bool:
+    """Whether issues live in the one shared repository."""
+    return bool(ISSUE_REPO)
+
+
+def issue_home(repo: str) -> str:
+    """Where a project's issues are read and filed: the shared repository, or the project's own."""
+    return ISSUE_REPO or repo
+
+
+def owned_by(title: str, project: str) -> bool:
+    """Whether an issue belongs to `project`. Row ids repeat across projects, so the title prefix decides."""
+    return not shared() or title.startswith(f"[{project}]")
+
+
 LABEL_LIMIT = 1000
 # GitHub's documented secondary limits for content-creating requests. The defaults stay below them, and a
 # configuration above them is refused.
@@ -199,7 +220,7 @@ def _json_list(text: str, what: str) -> list[dict[str, object]]:
 
 
 def existing(
-    repo: str, network: bool = True, limit: int = ISSUE_LIMIT
+    repo: str, network: bool = True, limit: int = ISSUE_LIMIT, project: str = ""
 ) -> dict[str, dict[str, object]]:
     """Issues keyed by their marker, read from the API rather than remembered locally.
 
@@ -231,6 +252,8 @@ def existing(
         )
     by_key: dict[str, dict[str, object]] = {}
     for item in items:
+        if project and not owned_by(str(item.get("title", "")), project):
+            continue
         match = MARKER_RE.search(str(item.get("body", "")))
         if not match:
             continue
@@ -389,6 +412,9 @@ def ensure_milestones(
 
 def placement(row: dict[str, str], ladder: dict[str, str]) -> str:
     """The milestone title a row's issue should carry: "" when the row cites none the ladder describes."""
+    if shared():
+        # Milestone names repeat across projects, so one repository cannot hold them: the parent epic does.
+        return ""
     key = row.get("milestone", "")
     return rowdoc.milestone_title(key, ladder) if key in ladder else ""
 
@@ -616,6 +642,7 @@ def sync_one(
     if not check and not repo_exists(repo):
         print(f"{name}: no GitHub repository {repo}; skipped (create it, then re-run)")
         return 0
+    home = issue_home(repo)
     ladder = (
         roadmap.ladder_for(root, name)
         if name in roadmap.LADDERS
@@ -623,12 +650,14 @@ def sync_one(
     )
     open_rows = [row for row in rows if action_of(row)[1] == "open"]
     keys = {row["milestone"] for row in open_rows if row["milestone"] in ladder}
+    if shared():
+        keys = set()
     # Every read happens before the first write. Reads are side-effect free, so a plan run reads too:
     # without that it reports every issue as a create, which is a preview that lies.
     try:
-        have = existing(repo, True)
-        labels = read_labels(repo) if not check else set()
-        milestones = read_milestones(repo) if not check and keys else []
+        have = existing(home, True, project=name)
+        labels = read_labels(home) if not check else set()
+        milestones = read_milestones(home) if not check and keys else []
     except ReadError as error:
         if check:
             print(f"{name}: 1 drift", file=sys.stdout)
@@ -645,9 +674,9 @@ def sync_one(
 
     creating = [row for row in open_rows if row["name"] not in have]
     PACER.where = f"{name} (labels)"
-    ensure_labels(repo, {action_of(row)[0] for row in creating}, labels, apply)
+    ensure_labels(home, {action_of(row)[0] for row in creating}, labels, apply)
     PACER.where = f"{name} (milestones)"
-    ensure_milestones(repo, ladder, keys, milestones, apply)
+    ensure_milestones(home, ladder, keys, milestones, apply)
     for row in rows:
         PACER.where = f"{name} {row['name']}"
         label, action = action_of(row)
@@ -656,10 +685,12 @@ def sync_one(
             state = state_of(item)
             if action == "close" and state == "OPEN":
                 run(
-                    ["gh", "issue", "close", str(item["number"]), "--repo", repo], apply
+                    ["gh", "issue", "close", str(item["number"]), "--repo", home], apply
                 )
             elif action == "open" and state == "OPEN":
-                update_issue(name, repo, row, rows, text, root, ladder, item, apply)
+                update_issue(
+                    name, repo, row, rows, text, root, ladder, item, apply, home=home
+                )
             elif action == "open":
                 print(
                     f"    {row['name']:<34} issue #{item['number']} is closed but the row is "
@@ -685,7 +716,7 @@ def sync_one(
                     "issue",
                     "create",
                     "--repo",
-                    repo,
+                    home,
                     "--title",
                     issue_title(name, row, summary),
                     "--body-file",
@@ -711,6 +742,7 @@ def update_issue(
     ladder: dict[str, str],
     item: dict[str, object],
     apply: bool,
+    home: str = "",
 ) -> None:
     """Edit an open issue whose title, body or milestone no longer matches what the row would produce."""
     summary, detail = detail_of(name, repo, row, rows, text, root, ladder)
@@ -732,7 +764,7 @@ def update_issue(
         pathlib.Path(tempfile.gettempdir()) / f"{name}-roadmap-{row['name']}.issue.md"
     )
     file.write_text(wanted, encoding="utf-8", newline="\n")
-    argv = ["gh", "issue", "edit", str(item["number"]), "--repo", repo]
+    argv = ["gh", "issue", "edit", str(item["number"]), "--repo", home or repo]
     argv += ["--title", title, "--body-file", str(file)]
     if milestone:
         argv += ["--milestone", milestone]

@@ -533,3 +533,27 @@ def test_a_blocked_row_waits_for_a_person():
     code, text = pickup(BOARD_CARDS, store)
     assert code == 0 and "pkix:chain.build" not in store.blocked
     assert store.held == {"pkix:chain.build"}
+
+
+def test_a_card_in_the_shared_repository_belongs_to_its_title_prefix(monkeypatch):
+    import projecthub.github.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "ISSUE_REPO", "b1tninja-labs/portfolio")
+    moved = g.Item(
+        "I",
+        "ISSUE",
+        "N",
+        "https://github.com/b1tninja-labs/portfolio/issues/9",
+        "[pkix] a.b(): x",
+        {},
+    )
+    assert loop.project_of(moved) == "pkix"
+    assert loop.project_of(card("no prefix", repo="ctspy")) == "ctspy"
+
+
+@pytest.fixture(autouse=True)
+def _one_repository_per_project(monkeypatch):
+    """These tests describe the per-project layout. The shared repository has tests of its own."""
+    import projecthub.github.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "ISSUE_REPO", "")

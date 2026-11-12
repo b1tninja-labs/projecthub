@@ -26,6 +26,8 @@ Usage:
 
 from __future__ import annotations
 
+from projecthub.github.sync import shared
+
 import argparse
 import json
 import os
@@ -68,6 +70,10 @@ def repo_of(card: Item) -> str:
 
 
 def project_of(card: Item) -> str:
+    """The `[name]` title prefix, which says the project now that every issue lives in one repository; the
+    repository name for a card without one."""
+    if shared():
+        return card_project(card) or repo_of(card).split("/")[-1]
     return repo_of(card).split("/")[-1]
 
 

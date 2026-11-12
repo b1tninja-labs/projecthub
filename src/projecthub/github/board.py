@@ -54,7 +54,7 @@ from projecthub import registry as portfolio
 from projecthub.db import parser as roadmap
 from projecthub.github import rowdoc
 from projecthub.github.client import Change, GhProjectsError, Item, Project, Projects
-from projecthub.github.sync import STATUSES, gh, rows_of
+from projecthub.github.sync import STATUSES, gh, issue_home, owned_by, rows_of, shared
 
 ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
 OWNER = config.PROJECT_OWNER
@@ -730,22 +730,40 @@ class Board:
             self._issues[repo] = self.store.read(repo)
         return self._issues[repo]
 
-    def find(self, repo: str, marker: str) -> Issue | None:
-        """The issue carrying `marker`, read only."""
-        return next((i for i in self.issues(repo) if marker in i.body), None)
+    def find(self, repo: str, marker: str, project: str = "") -> Issue | None:
+        """The issue carrying `marker`, read only. With `project`, only that project's issues count."""
+        return next(
+            (
+                i
+                for i in self.issues(repo)
+                if marker in i.body and (not project or owned_by(i.title, project))
+            ),
+            None,
+        )
 
     def ensure(
-        self, repo: str, marker: str, title: str, body: str, milestone: str = ""
+        self,
+        repo: str,
+        marker: str,
+        title: str,
+        body: str,
+        milestone: str = "",
+        project: str = "",
     ) -> Issue | None:
         """The issue carrying `marker`, created or brought up to date. None in a plan run that would create it."""
         title, body = unlocal(title), unlocal(body)
-        current = self.find(repo, marker)
+        current = self.find(repo, marker, project)
         if current is None:
             if not self.say(f"create {repo} issue {title!r}"):
                 return None
             self.store.create(repo, title, body, milestone)
             made = next(
-                (i for i in self.issues(repo, refresh=True) if marker in i.body), None
+                (
+                    i
+                    for i in self.issues(repo, refresh=True)
+                    if marker in i.body and (not project or owned_by(i.title, project))
+                ),
+                None,
             )
             if made is None:
                 raise GhProjectsError(f"created {title!r} in {repo} but cannot find it")
@@ -1027,7 +1045,9 @@ def build(board: Board, only: set[str] | None) -> None:
         rows_by[entry.name] = rows
         row_issues: dict[str, Issue] = {}
         if state.repo and rows:
-            for issue in board.issues(state.repo):
+            for issue in board.issues(issue_home(state.repo)):
+                if not owned_by(issue.title, entry.name):
+                    continue
                 found_row = ROW_MARKER.search(issue.body)
                 if found_row:
                     row_issues[found_row.group(1)] = issue
@@ -1166,14 +1186,17 @@ def build(board: Board, only: set[str] | None) -> None:
         for key in sorted({r["milestone"] for r in rows if r["milestone"]}):
             in_milestone = [r for r in rows if r["milestone"] == key]
             epic = board.ensure(
-                state.repo,
+                issue_home(state.repo),
                 EPIC_MARKER.format(key),
                 epic_title(entry.name, key, ladder),
                 epic_body(entry.name, state.repo, key, ladder, in_milestone, numbers),
-                board.milestone(
+                ""
+                if shared()
+                else board.milestone(
                     state.repo,
                     rowdoc.milestone_title(key, ladder) if key in ladder else "",
                 ),
+                project=entry.name,
             )
             if epic is None:
                 continue
