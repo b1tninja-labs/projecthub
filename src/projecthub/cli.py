@@ -41,6 +41,10 @@ COMMANDS = {
         "L1, L3 and L4 for rows that flipped to done",
     ),
     "mutate": ("projecthub.evidence.mutate", "scoped mutation for one row"),
+    "site": (
+        "projecthub.site.live",
+        "write the site's data from the product repos and Project 1",
+    ),
     "export": ("projecthub.site.export", "write portfolio.json for the site"),
 }
 
