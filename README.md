@@ -19,5 +19,11 @@ the commands that prove it and the ways to end it. `NO WORK` is a real answer: a
 Until the portfolio's issues reach the organization Project, the live command is `python sdk-forge/loop.py pickup`
 in the `D:\code` workspace, and `projecthub pickup` reports `NO WORK`.
 
+## Shells
+
+`projecthub shells` generates the protocol SDK shells in the workspace, runs the five gates across them, and
+is the pre-commit hook the workspace uses (`projecthub shells generate --dry-run`, `projecthub shells verify`).
+It replaces sdk-forge; see [docs/shells.md](docs/shells.md).
+
 Status: early. The design and the decisions behind it are recorded in the portfolio's PORTFOLIO.md, section 9,
 items 10 and 11.

@@ -6,7 +6,9 @@ import os
 import subprocess
 from pathlib import Path
 
-ROOT = Path(os.environ.get("FORGE_ROOT") or "D:/code")
+ROOT = Path(
+    os.environ.get("PROJECTHUB_ROOT") or os.environ.get("FORGE_ROOT") or "D:/code"
+)
 
 
 def state_dir() -> Path:

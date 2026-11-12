@@ -46,6 +46,7 @@ COMMANDS = {
         "write the site's data from the product repos and Project 1",
     ),
     "export": ("projecthub.site.export", "write portfolio.json for the site"),
+    "shells": ("projecthub.shells.cli", "generate, verify and hook the SDK shells"),
 }
 
 

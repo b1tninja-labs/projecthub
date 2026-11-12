@@ -1,0 +1,36 @@
+#!/bin/sh
+# Installed by `projecthub shells hygiene --install`; it lives in src/projecthub/shells/githooks of a
+# projecthub checkout, and the workspace points core.hooksPath at that directory.
+# Stops a commit that deletes a markdown heading by accident or adds scratch to the tree.
+# Escape hatch: git commit --no-verify, or PROJECTHUB_ALLOW_HEADING_LOSS=1 for the heading check only
+# (the older FORGE_ALLOW_HEADING_LOSS=1 is still honoured).
+
+# A path the interpreter can read: MSYS sh on Windows prints /d/code, which python does not understand,
+# and `pwd -W` gives D:/code there. Elsewhere `pwd -W` fails and plain `pwd` is the answer.
+native() { (cd "$1" 2>/dev/null && { pwd -W 2>/dev/null || pwd; }); }
+
+# This file is three directories below the checkout's src directory. PROJECTHUB_SRC overrides that, for
+# a hooks directory copied elsewhere; with neither, an installed projecthub has to be importable.
+SRC="${PROJECTHUB_SRC:-$(native "$(dirname "$0")/../../..")}"
+case "$(uname -s 2>/dev/null)" in
+  MINGW* | MSYS* | CYGWIN*) SEP=";" ;;
+  *) SEP=":" ;;
+esac
+if [ -n "$SRC" ] && [ -f "$SRC/projecthub/shells/hygiene.py" ]; then
+  PYTHONPATH="$SRC${PYTHONPATH:+$SEP$PYTHONPATH}"
+  export PYTHONPATH
+fi
+
+# `python` and `py` are not interchangeable on Windows boxes: one is often absent while the other is
+# the launcher, and a `python` on PATH can be a stub that runs nothing. The import below is the test.
+PY="${PYTHON:-python}"
+command -v "$PY" >/dev/null 2>&1 || PY=py
+
+if ! command -v "$PY" >/dev/null 2>&1 || ! "$PY" -c "import projecthub.shells.hygiene" >/dev/null 2>&1; then
+  # Deliberately fatal. A gate that cannot run and exits 0 reports the same green as a clean tree,
+  # which is how a check becomes decoration without anyone deciding to remove it.
+  echo "pre-commit: cannot run the projecthub hygiene check (projecthub not importable or no interpreter)." >&2
+  echo "pre-commit: set PROJECTHUB_SRC or PYTHON, or bypass with --no-verify if you accept no check ran." >&2
+  exit 1
+fi
+exec "$PY" -m projecthub shells hook pre-commit
