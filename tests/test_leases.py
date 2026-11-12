@@ -136,11 +136,18 @@ def test_the_server_refuses_a_row_that_is_not_ready_and_never_claims_read_only(s
         "forge_lease_heartbeat",
         "forge_lease_release",
         "forge_leases",
+        "log",
+        "note",
+        "park",
+        "propose",
+        "submit",
     ]
     for name, tool in tools.items():
         assert tool.output_schema, name
         assert tool.annotations.destructive_hint is False, name
-        assert tool.annotations.read_only_hint is (name == "forge_leases"), name
+        assert tool.annotations.read_only_hint is (name in ("forge_leases", "log")), (
+            name
+        )
     with pytest.raises(ToolError, match="NOT_READY: project not Active"):
         anyio.run(
             app.call_tool, "forge_lease_acquire", {"project": "pkix", "row_id": "x.y"}

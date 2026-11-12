@@ -11,13 +11,27 @@ agents racing for one row get exactly one lease. It writes nothing else: not ROA
 That is why this is its own opt-in MCP server (`forge-lease`) rather than tools on the read-only planner:
 a client that registers only the planner cannot reach a write of any kind.
 
-State: live -> released (handoff / pr_opened / abandoned) | expired | blocked. A block of the same kind on
-the same row more than twice escalates: the row needs a person, not another attempt (the Hermes rule).
+State: live -> released (handoff / pr_opened / abandoned / parked) | expired | blocked. A block of the same
+kind on the same row more than twice escalates: the row needs a person, not another attempt (the Hermes rule).
+A holder has one live lease at a time unless the caller asks for more.
+
+The work log. Beside the lease, an agent can record a note (progress, finding, test_written, pr_opened), park
+a row with a resume note, propose new work (it lands in a local `proposals` table and on the board's Triage
+status, where the owner accepts or rejects it) and submit a commit for an evidence check (a `submissions` row
+in state 'queued'; this module runs no tests). None of these marks anything done or writes a ROADMAP: done is
+decided only by an evidence check.
+
+The outbox. Every event that changes what the board shows also writes an `outbox` row in the same transaction,
+coalesced per (sink, key), so a crash cannot leave an event without its pending write or the reverse, and ten
+updates to one item stay one pending write. Another process drains it with `pending`, `mark_done` and
+`retry_later`. A payload carries a status, a date, the holder and "<event kind> <ISO time>": note, block and
+release text stays in this file and never leaves the machine.
 
 Usage:
-    python leases.py                 # speaks MCP on stdio (forge-lease)
-    python leases.py list            # live leases, for a person
-    python leases.py steal <lease_id>  # human-only: end someone else's lease
+    python -m projecthub.mcp.work                 # speaks MCP on stdio
+    python -m projecthub.mcp.work list            # live leases, for a person
+    python -m projecthub.mcp.work steal <lease_id>  # human-only: end someone else's lease
+    python -m projecthub.mcp.work note | park | propose | submit | log | outbox ...   # see --help
 """
 
 from __future__ import annotations
@@ -28,6 +42,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import sqlite3
 import sys
 import time
@@ -40,9 +55,23 @@ from typing import TypedDict
 DEFAULT_DB = paths.state_dir() / "leases.sqlite"
 DEFAULT_TTL = 30 * 60
 MAX_TTL = 4 * 60 * 60
-OUTCOMES = ("handoff", "pr_opened", "abandoned")
+OUTCOMES = ("handoff", "pr_opened", "abandoned", "parked")
 BLOCK_KINDS = ("dependency", "spec_question", "decision_needed", "env")
+NOTE_KINDS = ("progress", "finding", "test_written", "pr_opened")
+PROPOSAL_KINDS = ("obligation", "bug", "task", "question")
+SINKS = ("board", "site")
 ESCALATE_AFTER = 2
+SHA = re.compile(r"[0-9a-f]{40}")
+
+# What the board shows for each release outcome. Every event also sets "Last activity".
+RELEASE_STATUS = {
+    "handoff": "Ready",
+    "abandoned": "Ready",
+    "parked": "Ready",
+    "pr_opened": "In review",
+}
+# The event kinds whose text the next holder of a row should read first, beside every note:* kind.
+HANDOFF_KINDS = ("release:handoff", "release:parked")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS leases (
@@ -56,7 +85,8 @@ CREATE TABLE IF NOT EXISTS leases (
     state TEXT NOT NULL,
     outcome TEXT,
     note TEXT,
-    pr_url TEXT
+    pr_url TEXT,
+    branch TEXT
 );
 CREATE INDEX IF NOT EXISTS leases_row ON leases(row_key, state);
 CREATE TABLE IF NOT EXISTS events (
@@ -66,6 +96,37 @@ CREATE TABLE IF NOT EXISTS events (
     row_key TEXT NOT NULL,
     kind TEXT NOT NULL,
     detail TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_row ON events(row_key, id);
+CREATE TABLE IF NOT EXISTS outbox (
+    id INTEGER PRIMARY KEY,
+    sink TEXT NOT NULL CHECK (sink IN ('board', 'site')),
+    key TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_at REAL NOT NULL DEFAULT 0,
+    done_at REAL,
+    UNIQUE(sink, key)
+);
+CREATE TABLE IF NOT EXISTS proposals (
+    id INTEGER PRIMARY KEY,
+    project TEXT NOT NULL,
+    title TEXT NOT NULL,
+    why TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('obligation', 'bug', 'task', 'question')),
+    spec TEXT NOT NULL DEFAULT '',
+    found_in TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'accepted', 'rejected')),
+    private INTEGER NOT NULL DEFAULT 0,
+    proposed_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    row_key TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    lease_id TEXT,
+    at REAL NOT NULL,
+    state TEXT NOT NULL
 );
 """
 
@@ -87,6 +148,7 @@ class Lease:
     acquired_at: float
     expires_at: float
     state: str
+    branch: str = ""
 
 
 def row_key(project: str, row_id: str) -> str:
@@ -98,12 +160,20 @@ class Store:
         self, path: pathlib.Path | None = None, now: Callable[[], float] = time.time
     ) -> None:
         self.path = path or pathlib.Path(
-            os.environ.get("FORGE_LEASES_DB") or DEFAULT_DB
+            os.environ.get("PROJECTHUB_LEASES_DB")
+            or os.environ.get("FORGE_LEASES_DB")
+            or DEFAULT_DB
         )
         self.now = now
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.executescript(SCHEMA)
+        with self._write() as db:
+            # A store made before notes carried refs, or leases a branch, gains the column once.
+            for table, column in (("events", "refs"), ("leases", "branch")):
+                columns = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
+                if column not in columns:
+                    db.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -136,6 +206,7 @@ class Store:
                 row["row_key"],
                 "expire",
                 "no heartbeat within the TTL",
+                {"Status": "Ready"},
             )
         db.execute(
             "UPDATE leases SET state='expired' WHERE state='live' AND expires_at <= ?",
@@ -149,10 +220,49 @@ class Store:
         key: str,
         kind: str,
         detail: str,
+        fields: dict[str, str | None] | None = None,
+        refs: list[str] | None = None,
     ) -> None:
+        """Append an event and, in the same transaction, its board write: `fields` plus Last activity.
+
+        `detail` stays in this file. The board payload is built only from `fields`, which callers fill with
+        statuses, dates and holders, and from the event kind and time. A field set to None asks the drain
+        to clear it.
+        """
+        at = self.now()
         db.execute(
-            "INSERT INTO events(at, lease_id, row_key, kind, detail) VALUES (?, ?, ?, ?, ?)",
-            (self.now(), lease_id, key, kind, detail),
+            "INSERT INTO events(at, lease_id, row_key, kind, detail, refs) VALUES (?, ?, ?, ?, ?, ?)",
+            (at, lease_id, key, kind, detail, json.dumps(refs) if refs else None),
+        )
+        board = {**(fields or {}), "Last activity": f"{kind} {_iso(at)}"}
+        self.enqueue(db, "board", key, {"row_key": key, "fields": board})
+
+    def enqueue(
+        self, db: sqlite3.Connection, sink: str, key: str, payload: dict[str, object]
+    ) -> None:
+        """Internal: queue a write to `sink` inside the caller's transaction, coalesced per (sink, key).
+
+        A pending write for the same item absorbs the new one: top-level keys are replaced and "fields" are
+        merged, so a claim followed by a note is still one write that carries Claimed and the latest activity.
+        A write that was already drained is replaced, and the attempt count starts over.
+        """
+        if sink not in SINKS:
+            raise LeaseError("BAD_SINK", f"sink must be one of {', '.join(SINKS)}")
+        found = db.execute(
+            "SELECT payload, done_at FROM outbox WHERE sink=? AND key=?", (sink, key)
+        ).fetchone()
+        merged = dict(payload)
+        if found is not None and found["done_at"] is None:
+            before = json.loads(found["payload"])
+            merged = {**before, **payload}
+            old, new = before.get("fields"), payload.get("fields")
+            if isinstance(old, dict) and isinstance(new, dict):
+                merged["fields"] = {**old, **new}
+        db.execute(
+            "INSERT INTO outbox(sink, key, payload) VALUES (?, ?, ?) "
+            "ON CONFLICT(sink, key) DO UPDATE SET payload=excluded.payload, attempts=0, next_at=0, "
+            "done_at=NULL",
+            (sink, key, json.dumps(merged, sort_keys=True)),
         )
 
     def _live(self, db: sqlite3.Connection, lease_id: str) -> sqlite3.Row:
@@ -183,8 +293,15 @@ class Store:
         holder: str = "agent",
         scope_files: list[str] | None = None,
         ttl: float = DEFAULT_TTL,
+        max_live: int = 1,
+        branch: str = "",
     ) -> Lease:
-        """A new lease on a row with no live lease. Readiness is the caller's check; this one is exclusivity."""
+        """A new lease on a row with no live lease. Readiness is the caller's check; this one is exclusivity.
+
+        A holder may hold `max_live` live leases at once, one by default, so an agent finishes, parks or
+        blocks a row before it takes the next. `branch` names the branch the work lands on: the evidence worker accepts
+        a submitted commit only if it is reachable from main, master or this branch.
+        """
         key = row_key(project, row_id)
         span = max(60.0, min(float(ttl), MAX_TTL))
         with self._write() as db:
@@ -198,6 +315,16 @@ class Store:
                     "LEASE_HELD",
                     f"{key} is leased by {held['holder']} until {_iso(held['expires_at'])}",
                 )
+            mine = db.execute(
+                "SELECT row_key FROM leases WHERE holder=? AND state='live' ORDER BY row_key",
+                (holder,),
+            ).fetchall()
+            if len(mine) >= max(1, max_live):
+                raise LeaseError(
+                    "HOLDER_BUSY",
+                    f"{holder} already holds {', '.join(r['row_key'] for r in mine)}; "
+                    "release, park or block it first",
+                )
             now = self.now()
             lease = Lease(
                 str(uuid.uuid4()),
@@ -207,9 +334,11 @@ class Store:
                 now,
                 now + span,
                 "live",
+                branch.strip(),
             )
             db.execute(
-                "INSERT INTO leases VALUES (?, ?, ?, ?, ?, ?, ?, 'live', NULL, NULL, NULL)",
+                "INSERT INTO leases(lease_id, row_key, holder, scope_files, ttl, acquired_at, expires_at, "
+                "state, branch) VALUES (?, ?, ?, ?, ?, ?, ?, 'live', ?)",
                 (
                     lease.lease_id,
                     key,
@@ -218,10 +347,20 @@ class Store:
                     span,
                     now,
                     lease.expires_at,
+                    lease.branch or None,
                 ),
             )
             self._event(
-                db, lease.lease_id, key, "acquire", f"{holder}, ttl {int(span)}s"
+                db,
+                lease.lease_id,
+                key,
+                "acquire",
+                f"{holder}, ttl {int(span)}s",
+                {
+                    "Status": "In progress",
+                    "Claimed": time.strftime("%Y-%m-%d", time.gmtime(now)),
+                    "Agent": holder,
+                },
             )
             return lease
 
@@ -245,6 +384,11 @@ class Store:
             raise LeaseError(
                 "PR_URL_REQUIRED", "a pr_opened release names the pull request"
             )
+        if outcome == "parked" and not note.strip():
+            raise LeaseError(
+                "NOTE_REQUIRED",
+                "a parked release says where to resume, so the next holder starts there",
+            )
         with self._write() as db:
             found = self._live(db, lease_id)
             db.execute(
@@ -252,7 +396,12 @@ class Store:
                 (outcome, note, pr_url or None, lease_id),
             )
             self._event(
-                db, lease_id, found["row_key"], f"release:{outcome}", note or pr_url
+                db,
+                lease_id,
+                found["row_key"],
+                f"release:{outcome}",
+                note or pr_url,
+                {"Status": RELEASE_STATUS[outcome]},
             )
             return "released"
 
@@ -273,7 +422,9 @@ class Store:
                 "UPDATE leases SET state='blocked', note=? WHERE lease_id=?",
                 (f"{kind}: {detail}", lease_id),
             )
-            self._event(db, lease_id, key, f"block:{kind}", detail)
+            self._event(
+                db, lease_id, key, f"block:{kind}", detail, {"Status": "Blocked"}
+            )
             times = db.execute(
                 "SELECT COUNT(*) FROM events WHERE row_key=? AND kind=?",
                 (key, f"block:{kind}"),
@@ -298,10 +449,221 @@ class Store:
                 "UPDATE leases SET state='released', outcome='stolen', note=? WHERE lease_id=?",
                 (reason, lease_id),
             )
-            self._event(db, lease_id, found["row_key"], "steal", reason)
+            self._event(
+                db, lease_id, found["row_key"], "steal", reason, {"Status": "Ready"}
+            )
             return "released"
 
+    def note(
+        self, lease_id: str, kind: str, text: str, refs: list[str] | None = None
+    ) -> dict[str, object]:
+        """Log a note against the row a live lease holds, and extend the lease by its TTL.
+
+        The text and refs stay in this store; the board learns only that a note of this kind happened.
+        """
+        if kind not in NOTE_KINDS:
+            raise LeaseError("BAD_KIND", f"kind must be one of {', '.join(NOTE_KINDS)}")
+        if not text.strip():
+            raise LeaseError("TEXT_REQUIRED", "a note says something")
+        with self._write() as db:
+            found = self._live(db, lease_id)
+            expires = self.now() + found["ttl"]
+            db.execute(
+                "UPDATE leases SET expires_at=? WHERE lease_id=?", (expires, lease_id)
+            )
+            self._event(
+                db, lease_id, found["row_key"], f"note:{kind}", text, refs=refs or []
+            )
+            return {
+                "lease_id": lease_id,
+                "row_key": found["row_key"],
+                "kind": kind,
+                "expires_at": _iso(expires),
+            }
+
+    def park(self, lease_id: str, note: str) -> str:
+        """A voluntary pause: the row is free again, and the resume note is the first thing its next holder sees."""
+        return self.release(lease_id, "parked", note=note)
+
+    def propose(
+        self,
+        project: str,
+        title: str,
+        why: str,
+        kind: str,
+        spec: str = "",
+        found_in: str = "",
+        private: bool = False,
+    ) -> dict[str, object]:
+        """Record proposed work in state open and queue it for the board's Triage status. The owner accepts it.
+
+        The id is "<project>:<n>". A private proposal carries `"private": true`, so the drain keeps it off
+        anything published.
+        """
+        if kind not in PROPOSAL_KINDS:
+            raise LeaseError(
+                "BAD_KIND", f"kind must be one of {', '.join(PROPOSAL_KINDS)}"
+            )
+        if not project.strip() or not title.strip():
+            raise LeaseError("TITLE_REQUIRED", "a proposal names its project and title")
+        if not why.strip():
+            raise LeaseError(
+                "WHY_REQUIRED", "say why the work is needed, so the owner can triage it"
+            )
+        with self._write() as db:
+            cursor = db.execute(
+                "INSERT INTO proposals(project, title, why, kind, spec, found_in, state, private, "
+                "proposed_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)",
+                (project, title, why, kind, spec, found_in, int(private), self.now()),
+            )
+            proposal_id = f"{project}:{cursor.lastrowid}"
+            payload: dict[str, object] = {
+                "proposal_id": proposal_id,
+                "project": project,
+                "fields": {"Status": "Triage"},
+                "title": title,
+                "kind": kind,
+            }
+            if private:
+                payload["private"] = True
+            self.enqueue(db, "board", f"proposal:{proposal_id}", payload)
+            return {"proposal_id": proposal_id, "state": "open", "status": "Triage"}
+
+    def submit(self, lease_id: str, sha: str) -> dict[str, object]:
+        """Queue a commit for an evidence check and show the row In review. Nothing runs here.
+
+        The evidence worker reads `queued_submissions()` and decides; a submission never marks a row done.
+        """
+        commit = sha.strip().lower()
+        if not SHA.fullmatch(commit):
+            raise LeaseError(
+                "BAD_SHA", "submit a full 40-hex commit id, not a branch, tag or prefix"
+            )
+        with self._write() as db:
+            found = self._live(db, lease_id)
+            key = found["row_key"]
+            cursor = db.execute(
+                "INSERT INTO submissions(row_key, sha, lease_id, at, state) VALUES (?, ?, ?, ?, 'queued')",
+                (key, commit, lease_id, self.now()),
+            )
+            self._event(db, lease_id, key, "submit", commit, {"Status": "In review"})
+            return {
+                "submission_id": int(cursor.lastrowid or 0),
+                "row_key": key,
+                "sha": commit,
+                "state": "queued",
+            }
+
+    # -- the outbox, for the process that drains it ------------------------------------------------
+
+    def pending(self, limit: int = 50) -> list[dict[str, object]]:
+        """Writes not yet done whose retry time has come, oldest first."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT * FROM outbox WHERE done_at IS NULL AND next_at <= ? ORDER BY id LIMIT ?",
+                (self.now(), max(1, limit)),
+            ).fetchall()
+        finally:
+            db.close()
+        return [
+            {
+                "id": r["id"],
+                "sink": r["sink"],
+                "key": r["key"],
+                "payload": json.loads(r["payload"]),
+                "attempts": r["attempts"],
+                "next_at": r["next_at"],
+            }
+            for r in rows
+        ]
+
+    def mark_done(
+        self, outbox_id: int, payload: dict[str, object] | None = None
+    ) -> bool:
+        """Mark a write delivered. Pass the payload you delivered, and a write that was coalesced with a newer
+        update after `pending()` read it stays pending instead of being lost. False if nothing was marked."""
+        with self._write() as db:
+            query = "UPDATE outbox SET done_at=? WHERE id=? AND done_at IS NULL"
+            params: tuple[object, ...] = (self.now(), outbox_id)
+            if payload is not None:
+                query += " AND payload=?"
+                params += (json.dumps(payload, sort_keys=True),)
+            return db.execute(query, params).rowcount == 1
+
+    def retry_later(self, outbox_id: int, delay_s: float) -> None:
+        """A delivery failed: count the attempt and wait `delay_s` before offering the write again."""
+        with self._write() as db:
+            db.execute(
+                "UPDATE outbox SET attempts=attempts+1, next_at=? WHERE id=? AND done_at IS NULL",
+                (self.now() + max(0.0, float(delay_s)), outbox_id),
+            )
+
+    def queued_submissions(self, limit: int = 50) -> list[dict[str, object]]:
+        """The evidence worker's hook: submissions waiting for a check, oldest first."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT * FROM submissions WHERE state='queued' ORDER BY id LIMIT ?",
+                (max(1, limit),),
+            ).fetchall()
+        finally:
+            db.close()
+        return [
+            {
+                "id": r["id"],
+                "row_key": r["row_key"],
+                "sha": r["sha"],
+                "lease_id": r["lease_id"],
+                "at": _iso(r["at"]),
+                "state": r["state"],
+            }
+            for r in rows
+        ]
+
     # -- reads -------------------------------------------------------------------------------------
+
+    def log(self, key: str, limit: int = 20) -> list[dict[str, object]]:
+        """Recent events for one row, newest first, with their text and refs: this is the local view."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT * FROM events WHERE row_key=? ORDER BY id DESC LIMIT ?",
+                (key, max(1, min(limit, 200))),
+            ).fetchall()
+        finally:
+            db.close()
+        return [
+            {
+                "at": _iso(r["at"]),
+                "lease_id": r["lease_id"],
+                "kind": r["kind"],
+                "text": r["detail"],
+                "refs": json.loads(r["refs"]) if r["refs"] else [],
+            }
+            for r in rows
+        ]
+
+    def last_handoff(self, key: str) -> dict[str, object] | None:
+        """The latest handoff, parked or note text on a row, for the packet the next holder reads first."""
+        db = self._connect()
+        try:
+            found = db.execute(
+                "SELECT * FROM events WHERE row_key=? AND detail != '' "
+                "AND (kind IN (?, ?) OR kind LIKE 'note:%') ORDER BY id DESC LIMIT 1",
+                (key, *HANDOFF_KINDS),
+            ).fetchone()
+        finally:
+            db.close()
+        if found is None:
+            return None
+        return {
+            "at": _iso(found["at"]),
+            "lease_id": found["lease_id"],
+            "kind": found["kind"],
+            "text": found["detail"],
+            "refs": json.loads(found["refs"]) if found["refs"] else [],
+        }
 
     def live(self) -> list[Lease]:
         with self._write() as db:
@@ -318,6 +680,7 @@ class Store:
                 r["acquired_at"],
                 r["expires_at"],
                 r["state"],
+                r["branch"] or "",
             )
             for r in rows
         ]
@@ -372,6 +735,7 @@ class AcquireOut(TypedDict):
     row_key: str
     expires_at: str
     scope_files: list[str]
+    branch: str
 
 
 class HeartbeatOut(TypedDict):
@@ -396,11 +760,40 @@ class LeasesOut(TypedDict):
     recent_events: list[dict[str, object]]
 
 
+class NoteOut(TypedDict):
+    lease_id: str
+    row_key: str
+    kind: str
+    expires_at: str
+
+
+class ProposeOut(TypedDict):
+    proposal_id: str
+    state: str
+    status: str
+
+
+class SubmitOut(TypedDict):
+    submission_id: int
+    row_key: str
+    sha: str
+    state: str
+
+
+class LogOut(TypedDict):
+    row_key: str
+    events: list[dict[str, object]]
+    last_handoff: dict[str, object] | None
+
+
 INSTRUCTIONS = (
-    "Leases on ROADMAP rows. Acquire one before working a row that forge_next lists as ready, heartbeat it "
-    f"at least every {DEFAULT_TTL // 60} minutes (the default TTL), and release it when you hand off, open a pull "
-    "request, or abandon the row. A lease is local bookkeeping: it never marks a row done, never edits "
-    "ROADMAP.md, and never touches GitHub. If the same block recurs, stop and ask a person."
+    "projecthub work log: leases on ROADMAP rows. Acquire one before working a row the planner lists as ready "
+    f"(one live lease per holder), heartbeat it at least every {DEFAULT_TTL // 60} minutes (the default TTL) or "
+    "log a note, which also extends it, and end it with release (handoff, pr_opened, abandoned), park (with a "
+    "resume note) or block. Propose new work you find; it goes to the owner's Triage. Submit a full commit sha "
+    "for an evidence check when the work is ready. Nothing here marks a row done or edits ROADMAP.md: done is "
+    "decided only by an evidence check. Note text stays on this machine. If the same block recurs, stop and "
+    "ask a person."
 )
 
 
@@ -447,18 +840,22 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         holder: str = "agent",
         scope_files: list[str] | None = None,
         ttl_s: int = DEFAULT_TTL,
+        branch: str = "",
     ) -> AcquireOut:
         why = check(project, row_id)
         if why:
             raise ToolError(f"NOT_READY: {why}")
         lease = guarded(
-            lambda: leases.acquire(project, row_id, holder, scope_files, ttl_s)
+            lambda: leases.acquire(
+                project, row_id, holder, scope_files, ttl_s, branch=branch
+            )
         )
         return {
             "lease_id": lease.lease_id,
             "row_key": lease.row_key,
             "expires_at": _iso(lease.expires_at),
             "scope_files": lease.scope_files,
+            "branch": lease.branch,
         }
 
     @app.tool(
@@ -473,7 +870,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         }
 
     @app.tool(
-        description="End a lease: outcome handoff, pr_opened (needs pr_url) or abandoned. The row is free again.",
+        description="End a lease: outcome handoff, pr_opened (needs pr_url), abandoned or parked (needs a note). The row is free again.",
         annotations=write,
         structured_output=True,
     )
@@ -516,6 +913,79 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
             "recent_events": leases.events(row_key, max(1, min(limit, 200))),
         }
 
+    @app.tool(
+        description=(
+            "Log a note on the row your lease holds: kind progress, finding, test_written or pr_opened, with refs "
+            "(files, URLs, commits) if any. Extends the lease like a heartbeat. The text stays local; the board "
+            "shows only that a note was logged."
+        ),
+        annotations=write,
+        structured_output=True,
+    )
+    def note(
+        lease_id: str, kind: str, text: str, refs: list[str] | None = None
+    ) -> NoteOut:
+        return guarded(lambda: leases.note(lease_id, kind, text, refs or []))  # type: ignore[no-any-return]
+
+    @app.tool(
+        description=(
+            "Pause a row voluntarily: ends the lease and pins the resume note to the row, so the next holder "
+            "starts where you stopped. The note is required."
+        ),
+        annotations=write,
+        structured_output=True,
+    )
+    def park(lease_id: str, note: str) -> ReleaseOut:
+        return {
+            "lease_id": lease_id,
+            "state": guarded(lambda: leases.park(lease_id, note)),
+        }
+
+    @app.tool(
+        description=(
+            "Propose work you found: kind obligation, bug, task or question, with why it is needed, and the spec "
+            "clause and the row or file where you found it if known. It goes to the board's Triage status; the "
+            "owner accepts or rejects it. It does not create a ROADMAP row. private=true keeps it off anything published."
+        ),
+        annotations=write,
+        structured_output=True,
+    )
+    def propose(
+        project: str,
+        title: str,
+        why: str,
+        kind: str,
+        spec: str = "",
+        found_in: str = "",
+        private: bool = False,
+    ) -> ProposeOut:
+        return guarded(  # type: ignore[no-any-return]
+            lambda: leases.propose(project, title, why, kind, spec, found_in, private)
+        )
+
+    @app.tool(
+        description=(
+            "Submit the row your lease holds for an evidence check at a full 40-hex commit sha. Queues the check "
+            "and shows the row In review; it runs no tests and never marks the row done."
+        ),
+        annotations=write,
+        structured_output=True,
+    )
+    def submit(lease_id: str, sha: str) -> SubmitOut:
+        return guarded(lambda: leases.submit(lease_id, sha))  # type: ignore[no-any-return]
+
+    @app.tool(
+        description="Recent events on one row (row_key is project:row_id), newest first, with note text and the latest handoff.",
+        annotations=read,
+        structured_output=True,
+    )
+    def log(row_key: str, limit: int = 20) -> LogOut:
+        return {
+            "row_key": row_key,
+            "events": leases.log(row_key, limit),
+            "last_handoff": leases.last_handoff(row_key),
+        }
+
     return app
 
 
@@ -556,13 +1026,114 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[0] in ("release", "block", "heartbeat") and len(argv) >= 2:
         return _finish(store, argv)
+    if argv[0] in WORK_COMMANDS:
+        return _work(store, argv)
     print(
-        "usage: leases.py [list | steal <lease_id> [reason] | heartbeat <lease_id>\n"
-        "                 | release <lease_id> <outcome> [--note TEXT] [--pr-url URL]\n"
-        "                 | block <lease_id> <kind> <detail>]",
+        "usage: projecthub leases [list | steal <lease_id> [reason] | heartbeat <lease_id>\n"
+        "         | acquire <project> <row_id> [--holder H] [--branch B] [--ttl S] [--scope FILE]...\n"
+        "         | release <lease_id> <outcome> [--note TEXT] [--pr-url URL]\n"
+        "         | block <lease_id> <kind> <detail>\n"
+        "         | note <lease_id> <kind> <text> [--ref REF]... | park <lease_id> <note>\n"
+        "         | propose <project> <kind> <title> --why TEXT [--spec S] [--found-in F]\n"
+        "         | submit <lease_id> <sha> | log <row_key> [--limit N] | outbox [--limit N]]",
         file=sys.stderr,
     )
     return 2
+
+
+WORK_COMMANDS = ("acquire", "note", "park", "propose", "submit", "log", "outbox")
+
+
+def _work(store: Store, argv: list[str]) -> int:
+    """The work-log calls the MCP server offers, and the outbox for a person, as subcommands."""
+    parser = argparse.ArgumentParser(prog="projecthub leases")
+    sub = parser.add_subparsers(dest="command", required=True)
+    acquire = sub.add_parser("acquire", help="lease a ready row")
+    acquire.add_argument("project")
+    acquire.add_argument("row_id")
+    acquire.add_argument("--holder", default="agent")
+    acquire.add_argument("--branch", default="", help="the branch the work lands on")
+    acquire.add_argument("--ttl", type=int, default=DEFAULT_TTL)
+    acquire.add_argument(
+        "--scope", action="append", default=[], help="a file you expect to touch"
+    )
+    note = sub.add_parser("note", help="log a note on a leased row; extends the lease")
+    note.add_argument("lease_id")
+    note.add_argument("kind", choices=NOTE_KINDS)
+    note.add_argument("text", nargs="+")
+    note.add_argument("--ref", action="append", default=[])
+    park = sub.add_parser("park", help="pause a row with a resume note")
+    park.add_argument("lease_id")
+    park.add_argument("note", nargs="+")
+    propose = sub.add_parser("propose", help="propose work for the owner's Triage")
+    propose.add_argument("project")
+    propose.add_argument("kind", choices=PROPOSAL_KINDS)
+    propose.add_argument("title", nargs="+")
+    propose.add_argument("--why", required=True)
+    propose.add_argument("--spec", default="")
+    propose.add_argument("--found-in", default="")
+    propose.add_argument(
+        "--private", action="store_true", help="never publish this proposal"
+    )
+    submit = sub.add_parser("submit", help="queue a commit for an evidence check")
+    submit.add_argument("lease_id")
+    submit.add_argument("sha")
+    log = sub.add_parser("log", help="recent events on a row, with note text")
+    log.add_argument("row_key")
+    log.add_argument("--limit", type=int, default=20)
+    outbox = sub.add_parser("outbox", help="pending outbox writes")
+    outbox.add_argument("--limit", type=int, default=50)
+    args = parser.parse_args(argv)
+    try:
+        got: object
+        if args.command == "acquire":
+            why = _ready_from_planner(args.project, args.row_id)
+            if why:
+                raise LeaseError("NOT_READY", why)
+            lease = store.acquire(
+                args.project,
+                args.row_id,
+                args.holder,
+                args.scope,
+                args.ttl,
+                branch=args.branch,
+            )
+            got = {
+                "lease_id": lease.lease_id,
+                "row_key": lease.row_key,
+                "expires_at": _iso(lease.expires_at),
+                "scope_files": lease.scope_files,
+                "branch": lease.branch,
+            }
+        elif args.command == "note":
+            got = store.note(args.lease_id, args.kind, " ".join(args.text), args.ref)
+        elif args.command == "park":
+            got = store.park(args.lease_id, " ".join(args.note))
+        elif args.command == "propose":
+            got = store.propose(
+                args.project,
+                " ".join(args.title),
+                args.why,
+                args.kind,
+                args.spec,
+                args.found_in,
+                args.private,
+            )
+        elif args.command == "submit":
+            got = store.submit(args.lease_id, args.sha)
+        elif args.command == "log":
+            got = {
+                "row_key": args.row_key,
+                "events": store.log(args.row_key, args.limit),
+                "last_handoff": store.last_handoff(args.row_key),
+            }
+        else:
+            got = store.pending(args.limit)
+    except LeaseError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(got if isinstance(got, str) else json.dumps(got, indent=2))
+    return 0
 
 
 def _finish(store: Store, argv: list[str]) -> int:
@@ -572,7 +1143,7 @@ def _finish(store: Store, argv: list[str]) -> int:
         if command == "heartbeat":
             print(f"renewed until {_iso(store.heartbeat(lease_id))}")
         elif command == "release":
-            parser = argparse.ArgumentParser(prog="leases.py release")
+            parser = argparse.ArgumentParser(prog="projecthub leases release")
             parser.add_argument("outcome")
             parser.add_argument("--note", default="")
             parser.add_argument("--pr-url", default="")
@@ -585,7 +1156,8 @@ def _finish(store: Store, argv: list[str]) -> int:
         else:
             if len(rest) < 2:
                 print(
-                    "usage: leases.py block <lease_id> <kind> <detail>", file=sys.stderr
+                    "usage: projecthub leases block <lease_id> <kind> <detail>",
+                    file=sys.stderr,
                 )
                 return 2
             print(json.dumps(store.block(lease_id, rest[0], " ".join(rest[1:]))))
