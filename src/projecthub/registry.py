@@ -103,6 +103,14 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "offline language and framework documentation (Kiwix ZIM) as dated, citable context for agents",
         "PORTFOLIO.md s4 reference libraries (2026-11-07)",
     ),
+    "registrata": (
+        "Library",
+        0,
+        0,
+        "pyrwhois",
+        "registration data: an RFC 2167 RWhois client and server, plus experimental WHOIS and RDAP behind one lookup model",
+        "PORTFOLIO.md s3 (implemented, not yet sequenced into a tier)",
+    ),
     "sdk-forge": (
         "Tooling",
         0,

@@ -372,7 +372,12 @@ LADDERS: dict[str, LadderSpec] = {
 # ---------------------------------------------------------------------------------------------- discovery
 
 # Project name -> directory, where they differ.
-DIRECTORIES = {"itulib": "itulibrary", "rfclib": "rfclibrary"}
+DIRECTORIES = {
+    "itulib": "itulibrary",
+    "rfclib": "rfclibrary",
+    # Renamed from pyrwhois; the checkout folder keeps the old name until it can be renamed.
+    "registrata": "pyrwhois",
+}
 MATRIX_FILES = ("ROADMAP.md", "PLAN.md", "docs/roadmap.md")
 # D19: where a project keeps its matrix somewhere the search order would not pick first.
 MATRIX_OVERRIDES = {"namespy": "docs/roadmap.md"}
@@ -387,6 +392,7 @@ HAND_OWNED = (
     "keyproof",
     "localns",
     "trustatlas",
+    "registrata",
 )
 
 

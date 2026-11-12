@@ -26,6 +26,8 @@ Design rules, each one load-bearing:
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
 import time
@@ -43,8 +45,31 @@ READ_SCOPES = ("read:project", "project")
 WRITE_SCOPES = ("project",)
 FIX_COMMAND = "gh auth refresh -s project"
 
+# An ANSI escape: a CSI sequence ending in its final byte (SGR colour is `ESC [ ... m`), or an OSC string
+# (`ESC ] ... BEL`). Both change presentation and neither can carry content, so removing them cannot alter
+# a byte of JSON. The shape is deliberately not just SGR: gh writes cursor and title sequences too, and one
+# left behind would break a parse the same way.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+
+
+def strip_ansi(text: str) -> str:
+    """`text` with no escape sequences in it. Untouched when there are none, which is the common case."""
+    return ANSI_ESCAPE.sub("", text) if "\x1b" in text else text
+
+
+# What to put in a gh child's environment to ask for uncoloured output. `CLICOLOR_FORCE=0` is the only knob
+# that works here, measured on 2026-11-09 against gh 2.96.0 on this machine: with it set the reply parses,
+# and with each of `NO_COLOR=1`, `CLICOLOR=0` and `TERM=dumb` set alone the escape codes stayed. The rest
+# are along for the ride because other tools read them and none of them can *add* colour.
+PLAIN_ENV = {"CLICOLOR_FORCE": "0", "NO_COLOR": "1", "TERM": "dumb"}
+
+# None until a call comes back coloured; then PLAIN_ENV, applied to every later call. Process-wide because
+# re-detecting means colouring the first reply of every process, and `pickup` is one request deep.
+_PLAIN_ARGS: dict[str, str] | None = None
+
 
 # Failures worth retrying: the request never got a real answer.
+
 TRANSIENT = (
     "HTTP 502",
     "HTTP 503",
@@ -96,7 +121,22 @@ Runner = Callable[[list[str], str | None], Completed]
 
 
 def gh_runner(argv: list[str], stdin: str | None = None) -> Completed:
-    """Run the gh CLI. The keyring token is the only credential involved."""
+    """Run the gh CLI, handing back text free of escape sequences. The keyring token is the only credential involved.
+
+    Why the stripping is here and not at each `json.loads`. `gh` colours its output whenever it thinks a
+    terminal owns the stream, and on this workspace's Windows shell that is true even through a pipe:
+    measured on 2026-11-09 against gh 2.96.0 with `NO_COLOR=1` set in the parent environment (which gh
+    evidently ignores) and again with `TERM=dumb`. Every JSON byte then arrives wrapped,
+    `\x1b[1;37m{\\x1b[m`, so no reply parses and every call raised "no usable response (exit 0)".
+    `loop.py pickup` — the entry point every arriving agent is told to run — read that as an empty board,
+    which is the exact failure this module's docstring exists to prevent. Fixing it in the runner fixes
+    every caller at once: `pickup`, `leases.py` and each MCP tool.
+
+    Only escapes are removed. A successful substitution says gh coloured something, so the next call asks
+    for plain output directly via `PLAIN_ENV`; on a machine whose gh does not colour, nothing is ever
+    rewritten, and clean bytes pass through this function unchanged.
+    """
+    global _PLAIN_ARGS  # noqa: PLW0603 - one process-wide flag beats re-detecting on every request
     exe = shutil.which("gh")
     if not exe:
         raise GhProjectsError("gh is not on PATH; install it and run gh auth login")
@@ -107,8 +147,12 @@ def gh_runner(argv: list[str], stdin: str | None = None) -> Completed:
         text=True,
         encoding="utf-8",
         check=False,
+        env=None if _PLAIN_ARGS is None else {**os.environ, **_PLAIN_ARGS},
     )
-    return Completed(done.returncode, done.stdout, done.stderr)
+    out, err = strip_ansi(done.stdout), strip_ansi(done.stderr)
+    if (out, err) != (done.stdout, done.stderr) and _PLAIN_ARGS is None:
+        _PLAIN_ARGS = dict(PLAIN_ENV)
+    return Completed(done.returncode, out, err)
 
 
 @dataclass(frozen=True)
