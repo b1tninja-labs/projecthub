@@ -46,7 +46,17 @@ COMMANDS = {
         "write the site's data from the product repos and Project 1",
     ),
     "export": ("projecthub.site.export", "write portfolio.json for the site"),
+    "query": (
+        "projecthub.mcp.query",
+        "rows across projects by state, milestone, test, lease and text",
+    ),
+    "graph": (
+        "projecthub.mcp.query",
+        "project dependencies, their order and cycles; --mermaid for a graph TD",
+    ),
 }
+# Commands whose module serves more than one: the command name is passed on as the first argument.
+PREFIXED = ("pickup", "query", "graph")
 
 
 def main() -> int:
@@ -57,7 +67,7 @@ def main() -> int:
             print(f"  {name:<13} {what}")
         return 0 if argv[:1] in ([], ["-h"], ["--help"]) else 2
     module = importlib.import_module(COMMANDS[argv[0]][0])
-    rest = ["pickup", *argv[1:]] if argv[0] == "pickup" else argv[1:]
+    rest = [argv[0], *argv[1:]] if argv[0] in PREFIXED else argv[1:]
     sys.argv = [f"projecthub {argv[0]}", *rest]
     result = (
         module.main(sys.argv[1:])

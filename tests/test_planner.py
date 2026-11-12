@@ -139,6 +139,9 @@ def test_mcp_tools_are_four_read_only_tools_with_output_schemas():
         "forge_packet",
         "forge_propose_status",
         "forge_status",
+        "graph",
+        "plan",
+        "query",
     ]
     for tool in tools:
         assert (

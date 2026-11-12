@@ -41,6 +41,7 @@ from typing import Any, TypedDict
 
 from projecthub.db import parser as roadmap
 from projecthub.db.parser import rows_of
+from projecthub.mcp import query as hubquery
 from projecthub.github.sync import MARKER, PROJECTS, STATUSES, gh, issue_home, owned_by
 
 # Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
@@ -856,6 +857,86 @@ def build():
             "context": context_for(project, row, 3),
             "how_to_write": f"python sdk-forge/planner.py status {project} {row} '{status}' --write",
         }
+
+    # -- projecthub query tools: Jira-style reads across projects (projecthub.mcp.query) ----------------
+
+    @app.tool(
+        description=(
+            "Rows across every project's matrix matching all the filters given: project, state (open, part, "
+            "done, nongoal), milestone, wave, tier, kind, has_test (exists, to be written, missing, none), "
+            "claimed and blocked (from the lease store), spec_contains, and text over id and title. Each row "
+            "carries its spec, named test and test state, and its claim or block. Sorted by wave, tier, project "
+            "and matrix order; `truncated` says when `limit` cut the list, `total` how many matched."
+        ),
+        annotations=read_only,
+        structured_output=True,
+    )
+    def query(
+        project: str = "",
+        state: str = "",
+        milestone: str = "",
+        wave: int | None = None,
+        tier: int | None = None,
+        kind: str = "",
+        has_test: str = "",
+        claimed: bool | None = None,
+        blocked: bool | None = None,
+        spec_contains: str = "",
+        text: str = "",
+        limit: int = 50,
+    ) -> hubquery.QueryOut:
+        filters: dict[str, object] = {
+            "project": project,
+            "state": state,
+            "milestone": milestone,
+            "wave": wave,
+            "tier": tier,
+            "kind": kind,
+            "has_test": has_test,
+            "claimed": claimed,
+            "blocked": blocked,
+            "spec_contains": spec_contains,
+            "text": text,
+        }
+        try:
+            return hubquery.query(hubquery.default_root(), filters, limit)
+        except hubquery.QueryError as error:
+            raise ToolError(str(error)) from error
+
+    @app.tool(
+        description=(
+            "Project dependencies from the registry: edges (project depends_on), a topological order, every "
+            "cycle (reported, never broken), dependencies the registry does not hold, and each project's open "
+            "rows (open or part). `project` narrows to that project and everything it reaches either way. "
+            "format=mermaid also returns a `graph TD` text with each dependency above what needs it."
+        ),
+        annotations=read_only,
+        structured_output=True,
+    )
+    def graph(project: str = "", format: str = "json") -> hubquery.GraphOut:
+        try:
+            return hubquery.graph(hubquery.default_root(), project, format)
+        except hubquery.QueryError as error:
+            raise ToolError(str(error)) from error
+
+    @app.tool(
+        description=(
+            "One summary of what to do now: ready rows (the same rules as forge_next), what is blocked and on "
+            "what (an unbuilt dependency, a lease that ended blocked, an open PORTFOLIO.md decision), work in "
+            "progress per project against the two-active-projects rule, and the open rows unchanged longest "
+            "(git blame). Every item says why. `active` overrides the board's Active field."
+        ),
+        annotations=read_only,
+        structured_output=True,
+    )
+    def plan(active: list[str] | None = None, limit: int = 10) -> hubquery.PlanOut:
+        try:
+            chosen = set(active) if active is not None else active_projects()
+        except (
+            Exception
+        ) as error:  # the board read failed: say so, never plan from an empty set
+            raise ToolError(f"could not read Active from the board: {error}") from error
+        return hubquery.plan(hubquery.default_root(), chosen, limit=limit)
 
     return app
 
