@@ -7,6 +7,10 @@ import sys
 
 COMMANDS = {
     "app": ("projecthub.app", "register the GitHub App from its manifest, once"),
+    "checkout": (
+        "projecthub.checkout",
+        "shallow-clone every registered public repo, as the workspace lays them out",
+    ),
     "db": ("projecthub.db.store", "lossless matrix store: roundtrip, check-markers"),
     "import": (
         "projecthub.db.importer",

@@ -976,7 +976,14 @@ def build(board: Board, only: set[str] | None) -> None:
     """Project the files onto the board. With `only`, touch nothing but those projects: their own card, its
     links, their milestone epics and rows. Waves, decisions, the schema, the views and every other project's
     card are read (a link needs the issue at its other end) and never written."""
-    text = (ROOT / "PORTFOLIO.md").read_text(encoding="utf-8")
+    # A workflow has the product repositories but not the workspace's PORTFOLIO.md. Without it there are
+    # no waves or decisions to read, so only a run over projects (not the full build) makes sense there.
+    source = ROOT / "PORTFOLIO.md"
+    if not source.is_file() and only is None:
+        raise GhProjectsError(
+            f"{source} is absent: a full build needs it; pass --all-projects instead"
+        )
+    text = source.read_text(encoding="utf-8") if source.is_file() else ""
     entries = portfolio.entries()
     names = {e.name for e in entries}
     if only is not None and only - names:
@@ -1266,6 +1273,11 @@ def main(
         action="append",
         help="touch only these projects: their card, epics and rows",
     )
+    parser.add_argument(
+        "--all-projects",
+        action="store_true",
+        help="every project's card, epics and rows, and nothing else: no schema, views, waves or decisions",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--apply", action="store_true")
     mode.add_argument(
@@ -1304,7 +1316,10 @@ def main(
             board.schema(write=True)
             board.views()
         else:
-            build(board, set(args.project) if args.project else None)
+            only = set(args.project) if args.project else None
+            if args.all_projects:
+                only = {e.name for e in portfolio.entries()}
+            build(board, only)
     except GhProjectsError as error:
         print(f"board: {error}", file=sys.stderr)
         return 1

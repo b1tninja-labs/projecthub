@@ -560,3 +560,13 @@ def _one_repository_per_project(monkeypatch):
     import projecthub.github.sync as sync_module
 
     monkeypatch.setattr(sync_module, "ISSUE_REPO", "")
+
+
+def test_all_projects_covers_every_project_and_nothing_portfolio_wide(
+    tmp_path, monkeypatch
+):
+    world = World(tmp_path, monkeypatch)
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(b, "build", lambda board, only: seen.setdefault("only", only))
+    assert world.run("--all-projects", "--apply") == 0
+    assert seen["only"] == {e.name for e in b.portfolio.entries()}
