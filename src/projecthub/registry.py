@@ -6,14 +6,14 @@ Sources, in order of authority:
 - PORTFOLIO.md section 4 (tiers), section 7 (waves and their exit tests) and section 9 (decisions that need a
   human). Waves and decisions are parsed from the prose, so the board quotes the plan rather than
   paraphrasing it.
-- forge.POSITION for the generated shells' tier, wave and dependency arrows (itself a transcription of
-  PORTFOLIO.md sections 4 and 6, checked by the forge's own tests).
+- projecthub.shells.data.position.POSITION for the generated shells' tier, wave and dependency arrows (itself
+  a transcription of PORTFOLIO.md sections 4 and 6, checked by the shell generator's own tests).
 - the disk, through deps.py, for whether a project is absent, a plan, a shell or code, and its obligation
   table (ROADMAP.md, or PLAN.md where a project plans there) for how many rows are done.
 - each checkout's git remote for its GitHub repository, so a renamed repository (rfclibrary -> rfclib) is
   read, not remembered.
 
-The few projects outside forge.POSITION are listed in EXTRA with the PORTFOLIO.md section they come from.
+The few projects outside POSITION are listed in EXTRA with the PORTFOLIO.md section they come from.
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ def entries() -> list[Entry]:
             wave,
             name,
             "",
-            "forge.POSITION (PORTFOLIO.md s4, s6)",
+            "shells POSITION (PORTFOLIO.md s4, s6)",
             tuple(deps),
         )
         for name, (tier, wave, deps) in position.items()

@@ -1,6 +1,6 @@
 """Tests for the tool that decides which obligations become work items.
 
-The forge had no tests until now, which is the same defect it exists to prevent elsewhere: sync_roadmap
+The sync had no tests until now, which is the same defect it exists to prevent elsewhere: the sync
 files issues into eighteen repositories, and a parser that agrees with itself would file a confident,
 wrong board. These run without the network and without a token: gh is replaced by a fake that serves
 scripted reads and records every write.

@@ -19,7 +19,6 @@ import dataclasses
 import difflib
 import hashlib
 import json
-import os
 import pathlib
 import re
 import subprocess
@@ -41,8 +40,8 @@ from projecthub.shells.data.position import (
     WAVE_NOTE,
 )
 
-# The workspace the shells live in, resolved once by projecthub.paths: PROJECTHUB_ROOT (or the older
-# FORGE_ROOT) points the generator somewhere else - a scratch copy, or a checkout on another machine.
+# The workspace the shells live in, resolved once by projecthub.paths: PROJECTHUB_ROOT points the generator
+# somewhere else - a scratch copy, or a checkout on another machine.
 ROOT = paths.ROOT
 HERE = pathlib.Path(__file__).resolve().parent
 LICENSE_SRC = HERE / "templates" / "LICENSE-2.0.txt"
@@ -2295,12 +2294,8 @@ def render_plan(p):
 # carries its own "this file is generated" header.
 # ---------------------------------------------------------------------------
 
-# PROJECTHUB_MANIFEST moves the manifest; FORGE_MANIFEST is still read, after it, for older scripts.
-MANIFEST = pathlib.Path(
-    os.environ.get("PROJECTHUB_MANIFEST")
-    or os.environ.get("FORGE_MANIFEST")
-    or HERE / "data" / "generated.json"
-)
+# PROJECTHUB_MANIFEST moves the manifest.
+MANIFEST = pathlib.Path(paths.env("MANIFEST") or HERE / "data" / "generated.json")
 WORKSPACE = (
     "."  # the manifest key for files at the workspace root rather than in a project
 )

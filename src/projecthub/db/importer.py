@@ -4,8 +4,8 @@ PORTFOLIO.md section 9 item 11 (decided 2026-11-08): ROADMAP.md goes, and its co
 (project, epic, obligation, task, bug, question, decision, finding, rule) with links and citations. A file is
 removed only after its import report is signed off, so this importer has one hard property:
 
-**Every source line is placed exactly once.** Each line of the file, as stored losslessly by forgedb's raw
-store, is assigned to one entry or flagged for the maintainer. Nothing is guessed silently and nothing is
+**Every source line is placed exactly once.** Each line of the file, as stored losslessly by the matrix store
+(projecthub.db.store), is assigned to one entry or flagged for the maintainer. Nothing is guessed silently and nothing is
 dropped. The report proves it: `lines = placed + flagged + structural`, and lists every flagged line.
 
 Mapping, by section heading (the 29 generated shells share six sections, the hand-owned files add a few):
@@ -28,7 +28,7 @@ Citations are extracted (RFC numbers with an optional section, ITU-T X.6xx claus
 `unresolved`: resolving them through rfclib and itulib is the next sub-step, and a citation is never trusted
 from text alone. No clause text is ever stored, only refs.
 
-    python forge_import.py --report-dir D:/temp/forge-import [--project pkix] [--db PATH]
+    projecthub import --report-dir D:/temp/projecthub-import [--project pkix] [--db PATH]
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from projecthub.db import store as forgedb
+from projecthub.db import store as matrix_store
 from projecthub.db import parser as roadmap
 
 TYPES = (
@@ -148,7 +148,7 @@ def _rule_for(heading: str) -> tuple[str, str] | None:
 
 
 class Importer:
-    def __init__(self, store: forgedb.Store) -> None:
+    def __init__(self, store: matrix_store.Store) -> None:
         self.store = store
         self.db: sqlite3.Connection = store.db
         self.db.executescript(SCHEMA)
@@ -356,7 +356,7 @@ class Importer:
             (project,),
         ):
             out.append((seg, ordinal, json.loads(parsed)))
-        # Rows with no id (namespy) are stored by forgedb without a row_id; mint ids from their position.
+        # Rows with no id (namespy) are stored by the matrix store without a row_id; mint ids from their position.
         for seg, ordinal, raw in self.db.execute(
             "SELECT l.segment, l.ordinal, l.raw FROM lines l JOIN segments s ON s.project = l.project "
             "AND s.ordinal = l.segment WHERE l.project = ? AND s.kind = 'matrix' AND l.parsed IS NULL",
@@ -560,13 +560,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if refused:
         print(f"error: {refused}", file=sys.stderr)
         return 2
-    importer = Importer(forgedb.Store(args.db))
+    importer = Importer(matrix_store.Store(args.db))
     args.report_dir.mkdir(parents=True, exist_ok=True)
     summary = []
-    for project, _ in forgedb.matrices(forgedb.ROOT):
+    for project, _ in matrix_store.matrices(matrix_store.ROOT):
         if args.project and project not in args.project:
             continue
-        report = importer.import_project(forgedb.ROOT, project)
+        report = importer.import_project(matrix_store.ROOT, project)
         (args.report_dir / f"{project}.md").write_text(render(report), encoding="utf-8")
         summary.append(report)
         ok = "ok " if report["every_line_once"] else "BAD"

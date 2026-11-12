@@ -1,4 +1,4 @@
-"""forge.db step 1: lossless import and export of every matrix shape, one-cell edits, and self-checking markers."""
+"""The planning database, step 1: lossless import and export of every matrix shape, one-cell edits, and self-checking markers."""
 
 from __future__ import annotations
 
@@ -89,12 +89,50 @@ def test_any_named_column_can_change_and_a_missing_one_is_refused():
 def test_markers_wrap_each_region_and_import_back_to_the_same_bytes():
     s = _store()
     marked = s.export_text("demo", mark=True)
-    assert marked.count("<!-- forge:matrix begin rev=0 sha256=") == 2
+    assert marked.count("<!-- projecthub:matrix begin rev=0 sha256=") == 2
+    assert "forge:matrix" not in marked, "a new export writes only the new marker"
     assert F.check_markers(marked) == []
     again = F.Store()
     again.import_text("demo", "ROADMAP.md", marked)
     assert again.export_text("demo") == marked, "a marked file keeps its markers"
     assert again.export_text("demo", mark=False) == MIXED, "and they come off cleanly"
+
+
+def _legacy(text: str) -> str:
+    """`text` as an export from before the rename marked it."""
+    return text.replace("<!-- projecthub:matrix ", "<!-- forge:matrix ")
+
+
+def test_a_file_with_the_old_markers_round_trips_byte_for_byte(tmp_path):
+    old = _legacy(_store().export_text("demo", mark=True))
+    assert old.count("<!-- forge:matrix begin rev=0 sha256=") == 2
+    assert F.check_markers(old) == [], "the old markers still seal their regions"
+    for store in (F.Store(), F.Store(tmp_path / "persisted.db")):
+        store.import_text("demo", "ROADMAP.md", old)
+        assert store.export_text("demo") == old, (
+            "unchanged regions keep the old markers"
+        )
+        assert store.export_text("demo", mark=False) == MIXED
+    assert [s.legacy for s in F.split(old) if s.kind == "matrix"] == [True, True]
+
+
+def test_a_changed_region_from_an_old_file_is_remarked_with_the_new_tag():
+    s = _store(_legacy(_store().export_text("demo", mark=True)))
+    s.set_field("demo", "core.parse", "status", "[part]")
+    out = s.export_text("demo")
+    assert out.count("<!-- projecthub:matrix begin rev=1 sha256=") == 1
+    assert out.count("<!-- forge:matrix begin rev=0 sha256=") == 1, (
+        "the untouched region keeps its old marker"
+    )
+    assert F.check_markers(out) == []
+
+
+def test_a_hand_edit_inside_an_old_region_is_still_caught():
+    edited = _legacy(_store().export_text("demo", mark=True)).replace(
+        "| `core.parse` | RFC 1 §2 | `[ok]`", "| `core.parse` | RFC 1 §2 | `[part]`"
+    )
+    (problem,) = F.check_markers(edited)
+    assert "edited by hand" in problem
 
 
 def test_a_hand_edit_inside_a_region_is_caught_from_the_file_alone():
@@ -103,7 +141,7 @@ def test_a_hand_edit_inside_a_region_is_caught_from_the_file_alone():
         "| `core.parse` | RFC 1 §2 | `[ok]`", "| `core.parse` | RFC 1 §2 | `[part]`"
     )
     (problem,) = F.check_markers(edited)
-    assert "edited by hand" in problem and "forge tools" in problem
+    assert "edited by hand" in problem and "projecthub tools" in problem
     prose_edit = marked.replace("Prose before", "Prose, edited, before")
     assert F.check_markers(prose_edit) == [], (
         "prose outside the markers stays hand-owned"
@@ -123,6 +161,11 @@ def test_an_exported_change_bumps_rev_and_reseals_the_hash():
 @pytest.mark.parametrize(
     ("text", "fragment"),
     [
+        (
+            "<!-- projecthub:matrix begin rev=0 sha256=" + "0" * 64 + " -->\n| a |\n",
+            "no end marker",
+        ),
+        ("<!-- projecthub:matrix end -->\n", "no begin marker"),
         (
             "<!-- forge:matrix begin rev=0 sha256=" + "0" * 64 + " -->\n| a |\n",
             "no end marker",
@@ -147,9 +190,7 @@ def test_the_cli_checks_marker_files(tmp_path, capsys):
 WORKSPACE = F.ROOT / "PORTFOLIO.md"
 
 
-@pytest.mark.skipif(
-    not WORKSPACE.is_file(), reason="needs the D:\\code workspace beside sdk-forge"
-)
+@pytest.mark.skipif(not WORKSPACE.is_file(), reason="needs the D:\\code workspace")
 def test_every_real_matrix_in_the_workspace_round_trips_byte_for_byte():
     results = F.roundtrip(F.ROOT)
     assert len(results) >= 30, results
@@ -158,7 +199,7 @@ def test_every_real_matrix_in_the_workspace_round_trips_byte_for_byte():
 
 
 def test_the_store_persists_to_a_file(tmp_path: pathlib.Path):
-    path = tmp_path / "forge.db"
+    path = tmp_path / "projecthub.db"
     s = F.Store(path)
     s.import_text("demo", "ROADMAP.md", MIXED)
     s.set_field("demo", "core.parse", "status", "[part]")

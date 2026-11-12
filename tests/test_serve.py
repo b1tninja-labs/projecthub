@@ -9,25 +9,25 @@ from projecthub.mcp import serve
 
 EXPECTED = {
     "read": [
-        "forge_context",
-        "forge_next",
-        "forge_packet",
-        "forge_propose_status",
-        "forge_status",
+        "context",
         "graph",
+        "next",
+        "packet",
         "plan",
+        "propose_status",
         "query",
+        "status",
     ],
     "work": [
-        "forge_block",
-        "forge_lease_acquire",
-        "forge_lease_heartbeat",
-        "forge_lease_release",
-        "forge_leases",
+        "block",
+        "claim",
+        "heartbeat",
+        "leases",
         "log",
         "note",
         "park",
         "propose",
+        "release",
         "submit",
     ],
     "projects": [
@@ -45,7 +45,6 @@ EXPECTED = {
 def isolated(tmp_path, monkeypatch):
     """The work toolset opens its lease store on build; keep it, and the projects toolsets, out of this machine."""
     monkeypatch.setenv("PROJECTHUB_LEASES_DB", str(tmp_path / "leases.sqlite"))
-    monkeypatch.setenv("FORGE_LEASES_DB", str(tmp_path / "leases.sqlite"))
     monkeypatch.setenv("PROJECTS_MCP_TOOLSETS", "projects,portfolio")
     return tmp_path
 
@@ -121,13 +120,6 @@ def test_main_serves_the_chosen_toolset_on_stdio(monkeypatch, isolated):
     assert chosen == ["read", "work"] and served == [True, True]
 
 
-def test_projecthub_variables_win_over_the_forge_names():
-    env = {"PROJECTHUB_ROOT": "/new", "FORGE_ROOT": "/old", "FORGE_LEASES_DB": "/kept"}
-    serve.bridge_env(env)
-    assert env["FORGE_ROOT"] == "/new"
-    assert env["FORGE_LEASES_DB"] == "/kept"
-
-
 def test_the_work_store_follows_projecthub_leases_db(tmp_path, monkeypatch):
     pytest.importorskip("mcp")
     target = tmp_path / "projecthub-leases.sqlite"
@@ -142,4 +134,21 @@ def test_a_missing_mcp_extra_names_the_install(monkeypatch, capsys):
 
     monkeypatch.setitem(sys.modules, "mcp", None)
     assert serve.main([]) == 2
-    assert "projecthub[mcp]" in capsys.readouterr().err
+    assert "uvx --from git+https://github.com/b1tninja-labs/projecthub" in (
+        capsys.readouterr().err
+    )
+
+
+def test_the_servers_carry_the_projecthub_names(isolated):
+    pytest.importorskip("mcp")
+    assert serve.build("read").name == "projecthub"
+    assert serve.build("work").name == "projecthub-work"
+
+
+def test_the_work_store_still_follows_the_old_variable_alone(tmp_path, monkeypatch):
+    pytest.importorskip("mcp")
+    target = tmp_path / "old-name.sqlite"
+    monkeypatch.delenv("PROJECTHUB_LEASES_DB", raising=False)
+    monkeypatch.setenv("FORGE_LEASES_DB", str(target))
+    serve.build("work")
+    assert target.exists()

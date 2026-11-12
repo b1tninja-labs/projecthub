@@ -1,5 +1,9 @@
 # How the Projects board can support development here
 
+> Written before the rename, when this system was sdk-forge, and kept as the record it was. Tool, script,
+> server and variable names below are the old ones; [agents.md](agents.md#names-from-before-the-rename)
+> maps them to the current ones.
+
 Companion to [gh-projects-mcp.md](gh-projects-mcp.md), which covers the API and the client. This document
 asks a different question: given how this portfolio is actually run, what should the board do for the work.
 Every number below was measured on 2026-11-07 from the files and the live board, and the places where a

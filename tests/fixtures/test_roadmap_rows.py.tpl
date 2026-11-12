@@ -10,7 +10,7 @@ not count (`test_load_anchor_helper` is not `test_load_anchor`), and a reference
 "(to be written)" is a plan, never evidence. Only CI running the test can show it would
 fail if the behaviour regressed; this refuses the cheaper lie of naming a test nobody wrote.
 
-The grammar is the forge's roadmap.py, copied small: columns are found by the table's
+The grammar is projecthub's roadmap parser, copied small: columns are found by the table's
 header, never by position. Failures use pytest.fail rather than assert, so `python -O`
 cannot turn the check into a pass.
 """

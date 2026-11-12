@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import pathlib
 import re
 import sqlite3
@@ -36,7 +35,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TypedDict
 
-from projecthub import registry
+from projecthub import paths, registry
 from projecthub.db import parser as roadmap
 
 STATES = ("open", "part", "done", "nongoal")
@@ -66,10 +65,8 @@ class QueryError(ValueError):
 
 
 def default_root() -> pathlib.Path:
-    """The workspace: PROJECTHUB_ROOT, then the older FORGE_ROOT, then this machine's layout."""
-    return pathlib.Path(
-        os.environ.get("PROJECTHUB_ROOT") or os.environ.get("FORGE_ROOT") or "D:/code"
-    )
+    """The workspace: PROJECTHUB_ROOT, then this machine's layout."""
+    return pathlib.Path(paths.env("ROOT", "D:/code"))
 
 
 # -- leases, read-only ------------------------------------------------------------------------------
@@ -84,10 +81,10 @@ class Leases:
 
 
 def lease_db_path() -> pathlib.Path:
-    """Where work.Store keeps its database: PROJECTHUB_LEASES_DB, then FORGE_LEASES_DB, then its default."""
+    """Where work.Store keeps its database: PROJECTHUB_LEASES_DB, then its default."""
     from projecthub.mcp import work
 
-    named = os.environ.get("PROJECTHUB_LEASES_DB") or os.environ.get("FORGE_LEASES_DB")
+    named = paths.env("LEASES_DB")
     return pathlib.Path(named) if named else work.DEFAULT_DB
 
 

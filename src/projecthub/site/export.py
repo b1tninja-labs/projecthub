@@ -3,9 +3,9 @@
 The site (OpenTofu `templatefile` over this file, in the private aws-infra repo) owns presentation; this file
 owns facts. Two sources, both read and never written:
 
-- the registry (portfolio.entries(): PORTFOLIO.md tiers and waves, forge.POSITION) plus each project's
+- the registry (portfolio.entries(): PORTFOLIO.md tiers and waves, the shells' POSITION) plus each project's
   obligation matrix and dependency state on disk, for the planned and generated work;
-- `forge_data/public_repos.json`, the hand-owned list of the other public repositories: which are shown,
+- `src/projecthub/data/public_repos.json`, the hand-owned list of the other public repositories: which are shown,
   in which section, as what kind. Seeded by `--seed`; the person edits it. A repository absent from it is
   left out, so a new public repo never appears on the site until someone decides it should.
 
@@ -415,7 +415,7 @@ def serialise(record: dict[str, Any]) -> str:
 
 
 def contract_problems(record: dict[str, Any]) -> list[str]:
-    """What the site's `tofu plan` would reject, checked here first so a bad export fails in sdk-forge.
+    """What the site's `tofu plan` would reject, checked here first so a bad export fails in projecthub.
 
     From the site's contract (aws-infra sites/b1tninja): every URL is plain https:// with no quotes or
     whitespace; every project's section is in sections[]; the JSON holds no escapes for <, >, & or ";

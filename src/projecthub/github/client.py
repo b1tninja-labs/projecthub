@@ -1,7 +1,7 @@
 """A typed client for GitHub Projects (v2), with no knowledge of ROADMAP.md.
 
 The boundary is the point. Nothing here imports sync_roadmap, planner or verify, and nothing names an
-owner, a path or a project: when this outgrows the forge it moves out whole. The roadmap projection lives
+owner, a path or a project: when this outgrows projecthub it moves out whole. The roadmap projection lives
 elsewhere and calls this.
 
 Why it exists next to `sync_roadmap.graphql()`. That function prints an error and returns "", and its
@@ -128,7 +128,7 @@ def gh_runner(argv: list[str], stdin: str | None = None) -> Completed:
     measured on 2026-11-09 against gh 2.96.0 with `NO_COLOR=1` set in the parent environment (which gh
     evidently ignores) and again with `TERM=dumb`. Every JSON byte then arrives wrapped,
     `\x1b[1;37m{\\x1b[m`, so no reply parses and every call raised "no usable response (exit 0)".
-    `loop.py pickup` — the entry point every arriving agent is told to run — read that as an empty board,
+    `projecthub pickup` — the entry point every arriving agent is told to run — read that as an empty board,
     which is the exact failure this module's docstring exists to prevent. Fixing it in the runner fixes
     every caller at once: `pickup`, `leases.py` and each MCP tool.
 

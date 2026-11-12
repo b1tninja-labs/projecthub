@@ -347,9 +347,7 @@ def test_the_new_tools_have_schemas_never_destroy_and_never_write_a_roadmap(
     def call(name, args):  # type: ignore[no-untyped-def]
         return anyio.run(app.call_tool, name, args).structured_content
 
-    lease = call("forge_lease_acquire", {"project": "pkix", "row_id": "a.b"})[
-        "lease_id"
-    ]
+    lease = call("claim", {"project": "pkix", "row_id": "a.b"})["lease_id"]
     got = call(
         "note", {"lease_id": lease, "kind": "finding", "text": "x", "refs": ["y"]}
     )
@@ -539,7 +537,7 @@ def test_acquire_takes_a_branch_over_mcp_and_the_command_line(
     app = L.build(s, lambda project, row: "")
     got = anyio.run(
         app.call_tool,
-        "forge_lease_acquire",
+        "claim",
         {"project": "pkix", "row_id": "a.b", "branch": "agents/a-b"},
     ).structured_content
     assert got["branch"] == "agents/a-b"

@@ -1,5 +1,9 @@
 # MCP, planning and spot-checking: research and design
 
+> Written before the rename, when this system was sdk-forge, and kept as the record it was. Tool, script,
+> server and variable names below are the old ones; [agents.md](agents.md#names-from-before-the-rename)
+> maps them to the current ones.
+
 Scope: this synthesizes six reviewed research lanes. No files were edited and no GitHub resources were created. Local paths are under `D:\code`. A claim is marked **(unverified)** where no reviewer confirmed it. Section 7 lists those claims together.
 
 ---

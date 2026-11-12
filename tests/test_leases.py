@@ -131,42 +131,36 @@ def test_the_server_refuses_a_row_that_is_not_ready_and_never_claims_read_only(s
         s, lambda project, row: "" if row == "a.b" else "project not Active (3)"
     )
     assert sorted(tools) == [
-        "forge_block",
-        "forge_lease_acquire",
-        "forge_lease_heartbeat",
-        "forge_lease_release",
-        "forge_leases",
+        "block",
+        "claim",
+        "heartbeat",
+        "leases",
         "log",
         "note",
         "park",
         "propose",
+        "release",
         "submit",
     ]
     for name, tool in tools.items():
         assert tool.output_schema, name
         assert tool.annotations.destructive_hint is False, name
-        assert tool.annotations.read_only_hint is (name in ("forge_leases", "log")), (
-            name
-        )
+        assert tool.annotations.read_only_hint is (name in ("leases", "log")), name
     with pytest.raises(ToolError, match="NOT_READY: project not Active"):
-        anyio.run(
-            app.call_tool, "forge_lease_acquire", {"project": "pkix", "row_id": "x.y"}
-        )
+        anyio.run(app.call_tool, "claim", {"project": "pkix", "row_id": "x.y"})
     got = anyio.run(
-        app.call_tool, "forge_lease_acquire", {"project": "pkix", "row_id": "a.b"}
+        app.call_tool, "claim", {"project": "pkix", "row_id": "a.b"}
     ).structured_content
     assert got["row_key"] == "pkix:a.b" and got["lease_id"]
     with pytest.raises(ToolError, match="LEASE_HELD"):
-        anyio.run(
-            app.call_tool, "forge_lease_acquire", {"project": "pkix", "row_id": "a.b"}
-        )
-    listed = anyio.run(app.call_tool, "forge_leases", {}).structured_content
+        anyio.run(app.call_tool, "claim", {"project": "pkix", "row_id": "a.b"})
+    listed = anyio.run(app.call_tool, "leases", {}).structured_content
     assert [x["row_key"] for x in listed["live"]] == ["pkix:a.b"]
 
 
 def test_the_command_line_finishes_a_claim_without_mcp(tmp_path, monkeypatch, capsys):
     path = tmp_path / "leases.sqlite"
-    monkeypatch.setenv("FORGE_LEASES_DB", str(path))
+    monkeypatch.setenv("PROJECTHUB_LEASES_DB", str(path))
     lease = L.Store(path).acquire("pkix", "a.b", "agent-1")
     assert L.main(["heartbeat", lease.lease_id]) == 0
     assert "renewed until" in capsys.readouterr().out

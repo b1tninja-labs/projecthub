@@ -2,8 +2,7 @@
 # Installed by `projecthub shells hygiene --install`; it lives in src/projecthub/shells/githooks of a
 # projecthub checkout, and the workspace points core.hooksPath at that directory.
 # Stops a commit that deletes a markdown heading by accident or adds scratch to the tree.
-# Escape hatch: git commit --no-verify, or PROJECTHUB_ALLOW_HEADING_LOSS=1 for the heading check only
-# (the older FORGE_ALLOW_HEADING_LOSS=1 is still honoured).
+# Escape hatch: git commit --no-verify, or PROJECTHUB_ALLOW_HEADING_LOSS=1 for the heading check only.
 
 # A path the interpreter can read: MSYS sh on Windows prints /d/code, which python does not understand,
 # and `pwd -W` gives D:/code there. Elsewhere `pwd -W` fails and plain `pwd` is the answer.

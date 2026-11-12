@@ -8,20 +8,20 @@ tokens of context) is the reason not to spend tokens on it: a tool list is conte
 Why the board is read through projects_mcp.py. It is the one read surface that already understands Level,
 State, Active and the active rule, and its views are pure over items, so this file is testable with invented
 cards and no token at all. Reading GraphQL here instead would give the portfolio two ideas of what "Ready"
-means, which is the drift this forge exists to prevent. The GitHub MCP server is not the answer for this
+means, which is the drift projecthub exists to prevent. The GitHub MCP server is not the answer for this
 question: its `projects` toolset returns titles unless field ids are passed, and it is skipped entirely under
 `--read-only`, which is how the `github` server is configured on this machine.
 
 Why nothing here writes. Decision D23: a card is a claim, and a row reaches `[ok]` only in the same commit as a
 named test that would fail if the behaviour regressed. So this emits a step and a command; the flip, the gates
-and sync_roadmap.py stay in the CLIs that check evidence. Two fields make the boundary concrete: `promote`
+and `projecthub sync` stay in the CLIs that check evidence. Two fields make the boundary concrete: `promote`
 names the human action when a project is not yet Active (the board's own readme says Active is a person's
 field), and `caveats` carries deps.py's refusal to call a dependency unblocked.
 
 Usage:
-    py loop.py next --json
-    py loop.py next --project pkix
-    py loop.py next --explain
+    projecthub next --json
+    projecthub next --project pkix
+    projecthub pickup --who <name>
 """
 
 from __future__ import annotations
@@ -37,13 +37,13 @@ from datetime import UTC, datetime
 from collections.abc import Callable, Collection, Sequence
 from typing import Any, cast
 
-from projecthub import deps
+from projecthub import deps, paths
 from projecthub.mcp import read as planner
 from projecthub.github import projects_mcp as views
 from projecthub.db import parser as roadmap
 from projecthub.github.client import Item, Projects
 
-ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
+ROOT = pathlib.Path(paths.env("ROOT", "D:/code"))
 OWNER = os.environ.get("LOOP_OWNER") or views.DEFAULT_OWNER
 BOARD = int(os.environ.get("LOOP_BOARD") or views.DEFAULT_NUMBER)
 
@@ -360,7 +360,7 @@ def _step(
     if row is None:
         caveats.append(
             f"the board titles this card {card.title!r} and joins it to row {name!r}, but {matrix.name} has "
-            "no open row of that name: one of the two is stale, and sync_roadmap --check would call that drift"
+            "no open row of that name: one of the two is stale, and `projecthub sync --check` would call that drift"
         )
     named = card_project(card)
     if named and folder_of(root, named) != project:
@@ -414,7 +414,7 @@ def _stop(
     ]
     if not active and backlog:
         reason = (
-            f"nothing is Active: {len(backlog)} rows sit at Backlog and board.py will not move Status, so a "
+            f"nothing is Active: {len(backlog)} rows sit at Backlog and `projecthub board` will not move Status, so a "
             f"person has to mark one or two projects Active on board {OWNER}#{BOARD}"
         )
     elif len(active) >= views.ACTIVE_LIMIT and not ready:
@@ -611,7 +611,7 @@ def pickup_main(args: argparse.Namespace, cards: Sequence[Item]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="loop.py",
+        prog="projecthub",
         description="Name the next obligation the portfolio can start, and the command that runs it.",
     )
     parser.add_argument("action", nargs="?", default="next", choices=("next", "pickup"))

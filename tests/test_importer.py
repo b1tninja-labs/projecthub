@@ -7,7 +7,7 @@ import pathlib
 import pytest
 
 from projecthub.db import importer as I
-from projecthub.db import store as forgedb
+from projecthub.db import store as matrix_store
 
 ROADMAP = """# demo roadmap
 
@@ -62,7 +62,7 @@ It exists because nobody else ships RFC 8210 with tests.
 def imported(tmp_path: pathlib.Path):
     (tmp_path / "demo").mkdir()
     (tmp_path / "demo" / "ROADMAP.md").write_text(ROADMAP, encoding="utf-8")
-    importer = I.Importer(forgedb.Store())
+    importer = I.Importer(matrix_store.Store())
     report = importer.import_project(tmp_path, "demo")
     return importer, report, tmp_path
 
@@ -179,7 +179,7 @@ def test_rows_without_ids_get_minted_ids_and_are_flagged(tmp_path):
     (tmp_path / "demo" / "ROADMAP.md").write_text(
         text.replace("Item", "Obligation"), encoding="utf-8"
     )
-    importer = I.Importer(forgedb.Store())
+    importer = I.Importer(matrix_store.Store())
     report = importer.import_project(tmp_path, "demo")
     assert report["minted_ids"] == 2 and report["every_line_once"]
     assert all(
@@ -196,17 +196,15 @@ def test_the_report_renders_for_review(imported):
     assert "board projection" in text
 
 
-WORKSPACE = forgedb.ROOT / "PORTFOLIO.md"
+WORKSPACE = matrix_store.ROOT / "PORTFOLIO.md"
 
 
-@pytest.mark.skipif(
-    not WORKSPACE.is_file(), reason="needs the D:\\code workspace beside sdk-forge"
-)
+@pytest.mark.skipif(not WORKSPACE.is_file(), reason="needs the D:\\code workspace")
 def test_every_real_matrix_imports_with_every_line_placed_once():
-    importer = I.Importer(forgedb.Store())
+    importer = I.Importer(matrix_store.Store())
     bad = []
-    for project, _ in forgedb.matrices(forgedb.ROOT):
-        report = importer.import_project(forgedb.ROOT, project)
+    for project, _ in matrix_store.matrices(matrix_store.ROOT):
+        report = importer.import_project(matrix_store.ROOT, project)
         if not report["every_line_once"]:
             bad.append(project)
     assert bad == []

@@ -1,4 +1,4 @@
-"""forge.db, migration step 1: import every obligation matrix losslessly, export it back byte for byte.
+"""The planning database, migration step 1: import every obligation matrix losslessly, export it back byte for byte.
 
 PORTFOLIO.md section 9 item 10 (decided 2026-11-08) makes a local database the working authority for planning
 state and turns each ROADMAP matrix into a generated region. Nothing may depend on that until the round trip is
@@ -13,12 +13,14 @@ proven lossless, so this module does only three things:
   any other cell, so its spacing, backticks and the notes after a status survive. That is stricter than
   re-rendering the row canonically, and it means a one-cell change is a one-cell diff.
 - **Markers.** With `mark=True` each region is wrapped in
-  `<!-- forge:matrix begin rev=N sha256=H -->` ... `<!-- forge:matrix end -->`, where H is the sha256 of the
-  region's exact bytes. `check_markers` needs no database: a region whose bytes do not hash to its own marker
+  `<!-- projecthub:matrix begin rev=N sha256=H -->` ... `<!-- projecthub:matrix end -->`, where H is the sha256
+  of the region's exact bytes. Files marked before the rename carry `forge:matrix` instead; those markers are
+  read exactly like the new ones, and a region found with them that is exported unchanged keeps them, so the
+  round trip stays byte for byte. A region whose content changes is re-marked with the new spelling. `check_markers` needs no database: a region whose bytes do not hash to its own marker
   was edited by hand, which the pre-commit hook and CI can refuse in any worktree.
 
-    python forgedb.py roundtrip                      # import and export every matrix in memory; exit 1 on a diff
-    python forgedb.py check-markers FILE [FILE ...]  # exit 1 on a hand-edited region
+    projecthub db roundtrip                      # import and export every matrix in memory; exit 1 on a diff
+    projecthub db check-markers FILE [FILE ...]  # exit 1 on a hand-edited region
 """
 
 from __future__ import annotations
@@ -38,8 +40,16 @@ from dataclasses import dataclass, field
 from projecthub.db import parser as roadmap
 
 ROOT = paths.ROOT
-BEGIN = re.compile(r"^<!-- forge:matrix begin rev=(\d+) sha256=([0-9a-f]{64}) -->\s*$")
-END = re.compile(r"^<!-- forge:matrix end -->\s*$")
+TAG = "projecthub:matrix"
+# The tag every region was marked with before the rename. Read, and kept on a region exported unchanged,
+# never put on a region that was not already carrying it.
+LEGACY_TAG = "forge:matrix"
+BEGIN = re.compile(
+    r"^<!-- (?:projecthub|forge):matrix begin rev=(\d+) sha256=([0-9a-f]{64}) -->\s*$"
+)
+END = re.compile(r"^<!-- (?:projecthub|forge):matrix end -->\s*$")
+# segments.marked: 0 unmarked, 1 marked, MARKED_LEGACY marked with LEGACY_TAG.
+MARKED_LEGACY = 2
 HEADERLESS = {"spec": 1, "status": 2, "where": 3, "evidence": 4}
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -69,6 +79,7 @@ class Segment:
     rev: int | None = None
     marked: bool = False
     columns: dict[str, int] = field(default_factory=dict)
+    legacy: bool = False  # found marked with LEGACY_TAG, and unchanged since
 
 
 def _eol(line: str) -> str:
@@ -117,11 +128,14 @@ def split(text: str) -> list[Segment]:
             while j < len(lines) and not END.match(lines[j].rstrip("\r\n")):
                 j += 1
             if j == len(lines):
-                raise ValueError(f"line {i + 1}: forge:matrix begin with no end marker")
+                raise ValueError(f"line {i + 1}: {TAG} begin with no end marker")
             flush()
             body = lines[i + 1 : j]
+            legacy = begin.group(0).startswith(f"<!-- {LEGACY_TAG} ")
             segments.append(
-                Segment("matrix", body, int(begin.group(1)), True, _columns(body))
+                Segment(
+                    "matrix", body, int(begin.group(1)), True, _columns(body), legacy
+                )
             )
             i = j + 1
             continue
@@ -159,9 +173,10 @@ def _cut_tables(lines: list[str]) -> list[Segment]:
 
 
 def marker_lines(seg: Segment, eol: str) -> tuple[str, str]:
+    tag = LEGACY_TAG if seg.legacy else TAG
     return (
-        f"<!-- forge:matrix begin rev={seg.rev or 0} sha256={region_hash(seg.lines)} -->{eol}",
-        f"<!-- forge:matrix end -->{eol}",
+        f"<!-- {tag} begin rev={seg.rev or 0} sha256={region_hash(seg.lines)} -->{eol}",
+        f"<!-- {tag} end -->{eol}",
     )
 
 
@@ -186,19 +201,19 @@ def check_markers(text: str) -> list[str]:
     while i < len(lines):
         begin = BEGIN.match(lines[i].rstrip("\r\n"))
         if END.match(lines[i].rstrip("\r\n")):
-            problems.append(f"line {i + 1}: forge:matrix end with no begin marker")
+            problems.append(f"line {i + 1}: {TAG} end with no begin marker")
         if begin:
             j = i + 1
             while j < len(lines) and not END.match(lines[j].rstrip("\r\n")):
                 j += 1
             if j == len(lines):
-                problems.append(f"line {i + 1}: forge:matrix begin with no end marker")
+                problems.append(f"line {i + 1}: {TAG} begin with no end marker")
                 break
             actual = region_hash(lines[i + 1 : j])
             if actual != begin.group(2):
                 problems.append(
                     f"lines {i + 2}-{j}: the generated matrix was edited by hand (sha256 {actual[:12]}, "
-                    f"marker says {begin.group(2)[:12]}); change it with the forge tools and re-export"
+                    f"marker says {begin.group(2)[:12]}); change it with the projecthub tools and re-export"
                 )
             i = j
         i += 1
@@ -250,7 +265,7 @@ class Store:
                         s_index,
                         seg.kind,
                         seg.rev,
-                        int(seg.marked),
+                        MARKED_LEGACY if seg.legacy else int(seg.marked),
                         json.dumps(seg.columns),
                     ),
                 )
@@ -345,7 +360,12 @@ class Store:
                 lines.append(raw)
             out.append(
                 Segment(
-                    kind, lines, (rev or 0) + (1 if changed else 0), bool(marked), cols
+                    kind,
+                    lines,
+                    (rev or 0) + (1 if changed else 0),
+                    bool(marked),
+                    cols,
+                    marked == MARKED_LEGACY and not changed,
                 )
             )
         return out

@@ -18,15 +18,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import pathlib
 import re
 from dataclasses import dataclass
 
 from projecthub.github.sync import STATUSES, rows_of
+from projecthub import paths
 from projecthub.data import PROJECTS
 
-ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
+ROOT = pathlib.Path(paths.env("ROOT", "D:/code"))
 
 MISSING_CLAIM = "does not exist yet"
 # `- **name** - prose ...` up to the next bullet or heading.

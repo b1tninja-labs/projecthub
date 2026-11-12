@@ -1,4 +1,4 @@
-"""The forge's planning surface: read the portfolio, claim work, and update a row - with evidence.
+"""projecthub's planning surface: read the portfolio, claim work, and update a row - with evidence.
 
 Why this is small. Task Master ships 36 MCP tools and documents that they cost about 21,000 tokens of
 context, offering a 7-tool "core" mode at about 5,000. A tool list is not free: every schema is context
@@ -16,12 +16,12 @@ named tests is the authority CI can enforce. `claim` and `propose_status` move t
 copy it.
 
 Where the writes live (the MCP-writes decision, 2026-11-07: docs/research-mcp-planning-quality.md slice 1). The MCP server is read-only: every tool carries
-readOnlyHint, and `forge_propose_status` previews a change and runs the guard but cannot write. The two
+readOnlyHint, and `propose_status` previews a change and runs the guard but cannot write. The two
 writes - flipping a row and claiming its issue - are this module's command line, so each one is a
 deliberate act a person or a script runs, not a tool an agent reaches for mid-turn:
 
-    python planner.py status <project> <row> <status> [--write]
-    python planner.py claim <project> <row> <login>
+    python -m projecthub.mcp.read status <project> <row> <status> [--write]
+    python -m projecthub.mcp.read claim <project> <row> <login>
 
 The reason is the evidence rule. The guard checks that a named test exists; it cannot check that the test
 would fail if the behaviour regressed, so a write reachable from a tool call is a done row one confident
@@ -30,10 +30,9 @@ sentence away.
 
 from __future__ import annotations
 
-from projecthub import config
+from projecthub import config, paths
 
 import json
-import os
 import pathlib
 import subprocess
 import sys
@@ -44,10 +43,10 @@ from projecthub.db.parser import rows_of
 from projecthub.mcp import query as hubquery
 from projecthub.github.sync import MARKER, PROJECTS, STATUSES, gh, issue_home, owned_by
 
-# Mirrors sync_roadmap's --root/FORGE_ROOT. Importing ROOT from verify.py instead would have hardcoded
+# Mirrors `projecthub sync --root`/PROJECTHUB_ROOT. Importing ROOT from verify.py instead would have hardcoded
 # this machine's layout into every read and write; the planner's own tests discovered that by passing
 # here and failing in CI, where D:/code does not exist.
-ROOT = pathlib.Path(os.environ.get("FORGE_ROOT") or "D:/code")
+ROOT = pathlib.Path(paths.env("ROOT", "D:/code"))
 
 # The owner used to name a project's repository. Moved repositories resolve from here through GitHub's
 # redirect, and some stay personal on purpose; the Project's own owner is config.PROJECT_OWNER.
@@ -622,8 +621,8 @@ def packet(
 
 
 def _recorded_evidence(project: str, node: str) -> dict[str, object] | None:
-    """The node's result in the evidence record FORGE_EVIDENCE points at, if any (verify.py --json)."""
-    record = os.environ.get("FORGE_EVIDENCE")
+    """The node's result in the evidence record PROJECTHUB_EVIDENCE points at, if any (verify.py --json)."""
+    record = paths.env("EVIDENCE")
     if not (record and node):
         return None
     try:
@@ -759,14 +758,15 @@ def build():
         idempotent_hint=True,
         open_world_hint=False,
     )
-    app = MCPServer(name="sdk-forge", instructions=INSTRUCTIONS)
+    app = MCPServer(name="projecthub", instructions=INSTRUCTIONS)
 
     @app.tool(
+        name="status",
         description="Rows by state for every project with a matrix, plus open issue counts.",
         annotations=read_only,
         structured_output=True,
     )
-    def forge_status(with_issues: bool = True) -> StatusesOut:
+    def status_tool(with_issues: bool = True) -> StatusesOut:
         rows = sorted(portfolio_status(with_issues), key=lambda r: str(r["project"]))
         return {
             "projects": [
@@ -781,6 +781,7 @@ def build():
         }
 
     @app.tool(
+        name="next",
         description=(
             "Rows an agent may start now: open rows in owner-Active projects that are packages and depend on "
             "nothing unbuilt, ranked by named test written, milestone order, then projects unblocked. Says how "
@@ -789,7 +790,7 @@ def build():
         annotations=read_only,
         structured_output=True,
     )
-    def forge_next(
+    def next_tool(
         project: str = "", limit: int = 10, active: list[str] | None = None
     ) -> NextOut:
         try:
@@ -805,6 +806,7 @@ def build():
         return ready_rows(chosen, project, limit, leased=_live_leases())  # type: ignore[return-value]
 
     @app.tool(
+        name="packet",
         description=(
             "Everything needed to start one row, in one answer under 50,000 characters: where it lives, the "
             "named test and whether it exists, the spec cell (never the spec's text: read that with rfclib), the "
@@ -815,18 +817,19 @@ def build():
         annotations=read_only,
         structured_output=True,
     )
-    def forge_packet(row_id: str) -> PacketOut:
+    def packet_tool(row_id: str) -> PacketOut:
         try:
             return packet(row_id, leases=_live_lease_rows())  # type: ignore[return-value]
         except LookupError as error:
             raise ToolError(str(error)) from error
 
     @app.tool(
+        name="context",
         description="The prose around a row, where blocked notes and dead ends are recorded.",
         annotations=read_only,
         structured_output=True,
     )
-    def forge_context(project: str, row: str) -> ContextOut:
+    def context_tool(project: str, row: str) -> ContextOut:
         text = context_for(project, row)
         if text.startswith(f"{project} has no") or text.startswith("no mention of"):
             raise ToolError(text)
@@ -838,6 +841,7 @@ def build():
         }
 
     @app.tool(
+        name="propose_status",
         description=(
             "Preview a row status change and run the guard: refuses a done status whose named test does not "
             "exist, and refuses to change a declared non-goal. Never writes; the write is a CLI command."
@@ -845,7 +849,7 @@ def build():
         annotations=read_only,
         structured_output=True,
     )
-    def forge_propose_status(project: str, row: str, status: str) -> PreviewOut:
+    def propose_status_tool(project: str, row: str, status: str) -> PreviewOut:
         outcome = propose_status(project, row, status, write=False)
         if outcome.startswith("REFUSED:") or " has no ROADMAP.md" in outcome:
             raise ToolError(outcome)
@@ -855,7 +859,7 @@ def build():
             "status": status,
             "would_write": True,
             "context": context_for(project, row, 3),
-            "how_to_write": f"python sdk-forge/planner.py status {project} {row} '{status}' --write",
+            "how_to_write": f"python -m projecthub.mcp.read status {project} {row} '{status}' --write",
         }
 
     # -- projecthub query tools: Jira-style reads across projects (projecthub.mcp.query) ----------------
@@ -921,7 +925,7 @@ def build():
 
     @app.tool(
         description=(
-            "One summary of what to do now: ready rows (the same rules as forge_next), what is blocked and on "
+            "One summary of what to do now: ready rows (the same rules as next), what is blocked and on "
             "what (an unbuilt dependency, a lease that ended blocked, an open PORTFOLIO.md decision), work in "
             "progress per project against the two-active-projects rule, and the open rows unchanged longest "
             "(git blame). Every item says why. `active` overrides the board's Active field."
@@ -946,7 +950,7 @@ def cli(argv: list[str]) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="planner.py", description="sdk-forge planner writes"
+        prog="python -m projecthub.mcp.read", description="projecthub planner writes"
     )
     sub = parser.add_subparsers(dest="command", required=True)
     status = sub.add_parser(
@@ -984,7 +988,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         raise SystemExit(cli(sys.argv[1:]))
     print(
-        "sdk-forge planner: speaks MCP on stdio; run it from a client, or use the status/claim commands",
+        "projecthub planner: speaks MCP on stdio; run it from a client, or use the status/claim commands",
         file=sys.stderr,
     )
     main()
