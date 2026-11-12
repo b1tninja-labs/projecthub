@@ -1,0 +1,15 @@
+# One pinned toolchain for the portfolio, held here so every project is judged by the same linter.
+# The pins are not cosmetic. This repository's own CI went red on a commit that passed locally because
+# `pip install ruff` pulled a newer version that enables ISC004 and rejects an implicit string
+# concatenation in a generator template that 0.15.12 accepts. A gate whose verdict moves with whatever
+# pip fetched today is weather, not a gate. Consumers of the composite action install this file too.
+ruff==0.15.12
+mypy==1.20.2
+pytest==9.0.3
+# Pinned so the MCP surface is tested against a known API rather than whatever pip fetched. mcp 2.x
+# renamed FastMCP to MCPServer; the smoke test in test_planner.py is what notices, and it can only
+# notice if the version is not a moving target.
+mcp==2.3.0
+# Pinned because mutate.py's L2 stage reads its JSON report (executed_lines per file); the shape is
+# coverage's, not ours, and a check that measures reach should not move with pip either.
+coverage==7.17.0

@@ -1,0 +1,3 @@
+# The shell generator reads its templates as bytes (the LICENSE is copied byte for byte) and the git hook
+# is a POSIX shell script, so neither may be converted to CRLF by a Windows checkout.
+src/projecthub/shells/** text eol=lf

@@ -66,6 +66,7 @@ COMMANDS = {
         "projecthub.mcp.query",
         "project dependencies, their order and cycles; --mermaid for a graph TD",
     ),
+    "shells": ("projecthub.shells.cli", "generate, verify and hook the SDK shells"),
 }
 # Commands whose module serves more than one: the command name is passed on as the first argument.
 PREFIXED = ("pickup", "query", "graph")
