@@ -18,6 +18,10 @@ COMMANDS = {
     ),
     "sync": ("projecthub.github.sync", "project obligations onto GitHub issues"),
     "board": ("projecthub.github.board", "build and check the GitHub Project"),
+    "drain": (
+        "projecthub.github.outbox",
+        "send queued board updates to the GitHub Project, paced; --dry-run prints them",
+    ),
     "deps": ("projecthub.deps", "dependency state from disk"),
     "pickup": (
         "projecthub.mcp.loop",
