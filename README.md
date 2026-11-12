@@ -19,5 +19,8 @@ the commands that prove it and the ways to end it. `NO WORK` is a real answer: a
 Until the portfolio's issues reach the organization Project, the live command is `python sdk-forge/loop.py pickup`
 in the `D:\code` workspace, and `projecthub pickup` reports `NO WORK`.
 
+To reach the planning tools over MCP, register `projecthub mcp`; [docs/agents.md](docs/agents.md) has the config
+for Claude Code, Continue and Cline.
+
 Status: early. The design and the decisions behind it are recorded in the portfolio's PORTFOLIO.md, section 9,
 items 10 and 11.

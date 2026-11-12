@@ -28,6 +28,10 @@ COMMANDS = {
         "projecthub.mcp.work",
         "list or steal leases; with no arguments, the work MCP server",
     ),
+    "mcp": (
+        "projecthub.mcp.serve",
+        "serve one MCP toolset on stdio: --toolset read (default), work or projects",
+    ),
     "mcp-read": (
         "projecthub.mcp.read",
         "the read-only planning MCP server, and the status and claim commands",
