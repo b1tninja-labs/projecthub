@@ -395,6 +395,8 @@ HAND_OWNED = (
     "localns",
     "trustatlas",
     "registrata",
+    "nistlib",
+    "usblib",
 )
 
 
