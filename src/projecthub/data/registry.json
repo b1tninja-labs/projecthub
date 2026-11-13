@@ -1,5 +1,5 @@
 {
-  "_note": "The project registry, seeded from sdk-forge's verify.PROJECTS and forge_data/position.py. projecthub owns it now; sdk-forge reads it from here.",
+  "_note": "The project registry, first seeded from sdk-forge's verify.PROJECTS and position table; projecthub owns it.",
   "projects": [
     "certledger",
     "rpkit",
@@ -30,7 +30,9 @@
     "bgpfeed",
     "routevalid",
     "lgc",
-    "miblang"
+    "miblang",
+    "nistlib",
+    "usblib"
   ],
   "position": {
     "rpkit": [

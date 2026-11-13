@@ -395,7 +395,7 @@ def build(
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "source": {"repo": f"{OWNER}/sdk-forge (workspace)", "commit": sha or None},
+        "source": {"repo": "workspace (PORTFOLIO.md)", "commit": sha or None},
         "board_url": BOARD_URL,
         "sections": [
             s for s in SECTIONS if any(p["section"] == s["id"] for p in projects)

@@ -329,7 +329,12 @@ def check_in_child(
         ).rstrip(os.pathsep),
         "PYTHONDONTWRITEBYTECODE": "1",
     }
-    with tempfile.TemporaryDirectory(prefix="projecthub-worker-") as tmp:
+    # On Windows, taskkill returns before the killed pytest runs release their handles, so removing the tree
+    # right after a timeout can raise WinError 32. That error must not replace the real outcome (it turned a
+    # timeout into "crash: PermissionError" about one run in three); a leftover temp folder is harmless.
+    with tempfile.TemporaryDirectory(
+        prefix="projecthub-worker-", ignore_cleanup_errors=True
+    ) as tmp:
         out = pathlib.Path(tmp) / "record.json"
         process = subprocess.Popen(  # noqa: S603
             [

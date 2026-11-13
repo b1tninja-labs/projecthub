@@ -29,7 +29,7 @@ def project(name: str, *, active: bool = False, state: str = "Shell") -> g.Item:
     values: dict[str, object] = {"Level": "Project", "State": state}
     if active:
         values["Active"] = "Active"
-    return card(f"{name}: work", repo="sdk-forge", **values)
+    return card(f"{name}: work", repo="portfolio", **values)
 
 
 def row(name: str, status: str, repo: str, **values: object) -> g.Item:
@@ -157,7 +157,7 @@ def test_an_open_decision_naming_the_project_blocks_its_rows():
         project("ctspy", active=True),
         card(
             "Decision: ctspy log pinning",
-            repo="sdk-forge",
+            repo="portfolio",
             Level="Decision",
             Status="Backlog",
         ),

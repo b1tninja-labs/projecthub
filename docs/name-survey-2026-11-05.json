@@ -1,0 +1,380 @@
+[
+  {
+    "name": "asnkit",
+    "canonical": "asnkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "asspy",
+    "canonical": "asspy",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "bgpfeed",
+    "canonical": "bgpfeed",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "bmpkit",
+    "canonical": "bmpkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "caionline",
+    "canonical": "caionline",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "ctspy",
+    "canonical": "ctspy",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "cwmp",
+    "canonical": "cwmp",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "devicespy",
+    "canonical": "devicespy",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "dhtrack",
+    "canonical": "dhtrack",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "dnssd-srp",
+    "canonical": "dnssd-srp",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "enrollkit",
+    "canonical": "enrollkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "fake-printscan",
+    "canonical": "fake-printscan",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "fakeprint",
+    "canonical": "fakeprint",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "fakescan",
+    "canonical": "fakescan",
+    "simple": 200,
+    "json": 200,
+    "version": "1.0.0",
+    "summary": "Make a PDF look like it was printed and scanned",
+    "release_count": 2,
+    "uploaded": "2026-04-06",
+    "owner": "",
+    "yanked": false,
+    "dormant_days": 213,
+    "verdict": "TAKEN"
+  },
+  {
+    "name": "gam7",
+    "canonical": "gam7",
+    "simple": 200,
+    "json": 200,
+    "version": "7.50.0",
+    "summary": "CLI tool to manage Google Workspace",
+    "release_count": 304,
+    "uploaded": "2026-10-31",
+    "owner": "",
+    "yanked": false,
+    "dormant_days": 5,
+    "verdict": "TAKEN"
+  },
+  {
+    "name": "h3tunnel",
+    "canonical": "h3tunnel",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "hardly",
+    "canonical": "hardly",
+    "simple": 200,
+    "json": 200,
+    "version": "1.0.0",
+    "summary": "HAR analysis MCP/CLI \u2014 archive, headless, or interactive modes to inde",
+    "release_count": 1,
+    "uploaded": "2026-10-29",
+    "owner": "",
+    "yanked": false,
+    "dormant_days": 7,
+    "verdict": "TAKEN"
+  },
+  {
+    "name": "hdllib-wesnoth",
+    "canonical": "hdllib-wesnoth",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "idoxs",
+    "canonical": "idoxs",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "jason",
+    "canonical": "jason",
+    "simple": 200,
+    "json": 200,
+    "version": "0.1.7",
+    "summary": "Lightweight helpers for views returning json data in Django.",
+    "release_count": 8,
+    "uploaded": "2014-06-25",
+    "owner": "Rune Kaagaard",
+    "yanked": false,
+    "dormant_days": 4516,
+    "verdict": "TAKEN"
+  },
+  {
+    "name": "lawlibrary",
+    "canonical": "lawlibrary",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "leasespy",
+    "canonical": "leasespy",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "lgc",
+    "canonical": "lgc",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "namespy",
+    "canonical": "namespy",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "ntspy",
+    "canonical": "ntspy",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "ohttp",
+    "canonical": "ohttp",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "pathattr",
+    "canonical": "pathattr",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "payhoa",
+    "canonical": "payhoa",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "pdfcraft-fakeprint",
+    "canonical": "pdfcraft-fakeprint",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "pdfcraft-fakescan",
+    "canonical": "pdfcraft-fakescan",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "pdfcraft",
+    "canonical": "pdfcraft",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "pgpenv",
+    "canonical": "pgpenv",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "pkix",
+    "canonical": "pkix",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "registrata",
+    "canonical": "registrata",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "revokekit",
+    "canonical": "revokekit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "rfclib",
+    "canonical": "rfclib",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "routevalid",
+    "canonical": "routevalid",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "rpkit",
+    "canonical": "rpkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "rpslkit",
+    "canonical": "rpslkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "rtrkit",
+    "canonical": "rtrkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "sfields",
+    "canonical": "sfields",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "shaken",
+    "canonical": "shaken",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "signeddata",
+    "canonical": "signeddata",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "smud",
+    "canonical": "smud",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "snmpy",
+    "canonical": "snmpy",
+    "simple": 200,
+    "json": 200,
+    "version": "1.0.0",
+    "summary": "Simple pysnmp wrapper.",
+    "release_count": 5,
+    "uploaded": "2016-09-03",
+    "owner": "Robert Wlodarczyk",
+    "yanked": false,
+    "dormant_days": 3715,
+    "verdict": "TAKEN"
+  },
+  {
+    "name": "srtpkit",
+    "canonical": "srtpkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "syslogkit",
+    "canonical": "syslogkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "tacacs",
+    "canonical": "tacacs",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  },
+  {
+    "name": "turnkit",
+    "canonical": "turnkit",
+    "simple": 404,
+    "json": 404,
+    "verdict": "FREE"
+  }
+]

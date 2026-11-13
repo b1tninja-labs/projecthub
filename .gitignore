@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 dist/
 .venv/
+
+# The PyPI simple-index snapshot `projecthub shells names` keeps (about 16 MB): a cache, rebuilt with --refresh.
+src/projecthub/shells/cache/

@@ -375,6 +375,8 @@ LADDERS: dict[str, LadderSpec] = {
 DIRECTORIES = {
     "itulib": "itulibrary",
     "rfclib": "rfclibrary",
+    "nistlib": "nistlibrary",
+    "usblib": "usblibrary",
     # Renamed from pyrwhois; the checkout folder keeps the old name until it can be renamed.
     "registrata": "pyrwhois",
 }
@@ -393,6 +395,8 @@ HAND_OWNED = (
     "localns",
     "trustatlas",
     "registrata",
+    "nistlib",
+    "usblib",
 )
 
 

@@ -208,7 +208,10 @@ def test_generated_text_names_projecthub_not_the_old_generator(tmp_path, monkeyp
     files = generate.render_project(
         next(p for p in generate.ALL_PROJECTS if p["name"] == "rpkit")
     )
-    assert b"projecthub pickup --who <your name> --project rpkit" in files["AGENTS.md"]
+    assert (
+        b"python -m projecthub pickup --who <your name> --project rpkit"
+        in files["AGENTS.md"]
+    )
     plan = " ".join(files["docs/plan.md"].decode("utf-8").split())
     assert generate.PLAN_MARKER in plan
     index = generate.render_index(generate.ALL_PROJECTS)

@@ -64,7 +64,15 @@ def test_qualifies_needs_both_the_matrix_and_the_package(monkeypatch, tmp_path):
     project = tmp_path / "demo"
     project.mkdir()
     (project / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+    (project / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    assert verify.qualifies("demo") is None, "a matrix with no rows is not a matrix"
+    assert verify.skip_reason("demo") == "no obligation matrix"
+    (project / "ROADMAP.md").write_text(
+        "| `a.b()` | RFC 1 | `[ ]` | `tests/test_a.py::test_a` |\n", encoding="utf-8"
+    )
+    (project / "pyproject.toml").unlink()
     assert verify.qualifies("demo") is None
+    assert verify.skip_reason("demo") == "no pyproject.toml"
     (project / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
     assert verify.qualifies("demo") == project
     assert verify.qualifies("absent") is None
@@ -182,7 +190,9 @@ def test_typing_warnings_name_a_non_strict_config_and_an_exclusive_floor(tmp_pat
 def test_warnings_are_printed_and_never_fail_the_run(monkeypatch, tmp_path, capsys):
     project = tmp_path / "demo"
     project.mkdir()
-    (project / "ROADMAP.md").write_text("# demo\n", encoding="utf-8")
+    (project / "ROADMAP.md").write_text(
+        "| `a.b()` | RFC 1 | `[ ]` | `tests/test_a.py::test_a` |\n", encoding="utf-8"
+    )
     _project(project, '[project]\nrequires-python = ">3.12"\n')
     monkeypatch.setattr(verify, "ROOT", tmp_path)
     monkeypatch.setattr(verify, "run", lambda cmd, cwd, timeout=None: (0, "", ""))

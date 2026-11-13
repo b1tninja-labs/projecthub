@@ -26,6 +26,7 @@ from pathlib import Path
 
 from projecthub import paths
 from projecthub.data import PROJECTS as REGISTERED
+from projecthub.db import parser as roadmap
 
 ROOT = paths.ROOT
 TIMEOUT = float(os.environ.get("VERIFY_TIMEOUT") or 900)
@@ -34,9 +35,9 @@ MAX_LINES = 60
 # The registry's project list (projecthub/data/registry.json), in its order. The comment below is the
 # reasoning the list carried when it was written out here.
 # certledger qualifies the way the shells do (ROADMAP.md + pyproject.toml) and has real code
-# since phase 0, so it carries the same five gates. asn1core is absent because it plans in
-# PLAN.md/VECTORS.md and so fails qualifies(); widening that predicate is a separate decision,
-# recorded in PORTFOLIO.md section 10.
+# since phase 0, so it carries the same five gates. asn1core was absent because it plans in
+# PLAN.md/VECTORS.md and so failed the literal-ROADMAP.md predicate; qualifies() now asks the roadmap
+# grammar where a project's matrix actually is, which puts asn1core and registrata back under the gates.
 PROJECTS: list[str] = list(REGISTERED)
 
 GATES = ["compile", "pytest", "ruff", "format", "mypy"]
@@ -168,15 +169,43 @@ def _admits(specifier: str, version: str) -> bool:
         return False
 
 
+def project_dir(name: str) -> Path:
+    """Where a registered project is checked out.
+
+    Most projects are named after their folder; `registrata` lives in `pyrwhois/` and `nistlib` in
+    `nistlibrary/`, and the roadmap grammar's DIRECTORIES is the one place that mapping is written down.
+    Reading it here rather than assuming name == folder is what lets a renamed project be gated at all.
+    """
+    return roadmap.project_dir(ROOT, name)
+
+
 def qualifies(name: str) -> Path | None:
-    cwd = ROOT / name
-    if (
-        cwd.is_dir()
-        and (cwd / "ROADMAP.md").is_file()
-        and (cwd / "pyproject.toml").is_file()
-    ):
-        return cwd
-    return None
+    """The directory to run the five gates in, or None with the reason why not ("" when it qualifies).
+
+    The predicate used to be a literal `ROADMAP.md` next to a `pyproject.toml`, which silently excluded
+    every project that plans somewhere else: asn1core keeps its matrix in PLAN.md and registrata's folder is
+    named for the old project, so neither was ever gated. Now the matrix is found through the roadmap grammar
+    - ROADMAP.md, then PLAN.md, then docs/roadmap.md, with a per-project override - and it must hold rows, so
+    a file that merely exists no longer passes. A directory without a `pyproject.toml` still stays out: there
+    is no package to compile and mypy has nothing to name, which is why the plan-only projects (keyproof,
+    localns, trustatlas) are reported as skipped rather than run.
+    """
+    cwd = project_dir(name)
+    if not cwd.is_dir():
+        return None
+    if not (cwd / "pyproject.toml").is_file():
+        return None
+    return cwd if roadmap.matrix_path(ROOT, name) is not None else None
+
+
+def skip_reason(name: str) -> str:
+    """Why `qualifies` refused a project, in the words the summary line prints."""
+    cwd = project_dir(name)
+    if not cwd.is_dir():
+        return "absent"
+    if not (cwd / "pyproject.toml").is_file():
+        return "no pyproject.toml"
+    return "no obligation matrix"
 
 
 def refuse_path(path: Path) -> str:
@@ -362,7 +391,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  projects checked = {checked}")
     if skipped:
         print(
-            f"  skipped (missing ROADMAP.md/pyproject.toml or absent) = {', '.join(skipped)}"
+            "  skipped = "
+            + ", ".join(f"{name} ({skip_reason(name)})" for name in skipped)
         )
 
     if warned:

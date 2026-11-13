@@ -13,7 +13,9 @@ Sources, in order of authority:
 - each checkout's git remote for its GitHub repository, so a renamed repository (rfclibrary -> rfclib) is
   read, not remembered.
 
-The few projects outside POSITION are listed in EXTRA with the PORTFOLIO.md section they come from.
+The few projects outside POSITION are listed in EXTRA with the PORTFOLIO.md section they come from. Every one
+of them is also a row of that document - sections 3 and 4 - which `mentioned_in` checks, because an entry
+whose source nobody wrote down is a project the plan does not know about.
 """
 
 from __future__ import annotations
@@ -26,6 +28,16 @@ import subprocess
 from dataclasses import dataclass, field
 
 KINDS = ("Library", "Service", "Plan", "Reference", "Tooling")
+
+
+def directories() -> dict[str, str]:
+    """Project name -> checkout folder, for the projects whose folder carries another name. The map lives in
+    the roadmap grammar (`db.parser.DIRECTORIES`), which evidence, mutation and project_dir already read, so
+    there is one copy of it."""
+    from projecthub.db import parser
+
+    return dict(parser.DIRECTORIES)
+
 
 # Projects the generator does not position: (kind, tier, wave, directory, what it is, source). Tier and wave
 # 0 mean untiered and unsequenced, which is not the same as Wave 0 (hygiene). The "what" is PORTFOLIO.md's
@@ -95,6 +107,22 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "the ITU-T ASN.1 and X.500 text the RFC series cannot reach, served the same way",
         "reference library: asn1core's [verify against X.690] markers",
     ),
+    "nistlib": (
+        "Reference",
+        0,
+        0,
+        "nistlibrary",
+        "NIST publications as citable context for agents, served over MCP",
+        "reference library: default to the current final revision, every revision reachable",
+    ),
+    "usblib": (
+        "Reference",
+        0,
+        0,
+        "usblibrary",
+        "USB-IF specifications as citable context for agents, served over MCP",
+        "reference library: section text from the chosen PDF, with citations",
+    ),
     "zimlore": (
         "Reference",
         0,
@@ -111,13 +139,14 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "registration data: an RFC 2167 RWhois client and server, plus experimental WHOIS and RDAP behind one lookup model",
         "PORTFOLIO.md s3 (implemented, not yet sequenced into a tier)",
     ),
-    "sdk-forge": (
+    # sdk-forge until 2026-11-12, when it was retired into this repository (PORTFOLIO.md s9 item 12).
+    "projecthub": (
         "Tooling",
         0,
         0,
-        "sdk-forge",
-        "generator, gates and planning tools",
-        "PORTFOLIO.md s3 'Tooling'",
+        "projecthub",
+        "the planning system, the shell generator, its gates and the git hook",
+        "PORTFOLIO.md s3 'Tooling', s9 item 12",
     ),
     # Decided 2026-11-12: a tool for the router firmware build, not a library the portfolio depends on.
     "kconfigpy": (
@@ -250,11 +279,7 @@ def github_repo(root: pathlib.Path, directory: str) -> str:
     folder = root / directory
     remote = "origin"
     if not (folder / ".git").exists():
-        if directory != "sdk-forge":
-            return ""
-        # sdk-forge is a directory of the workspace repository, which publishes to GitHub through a remote
-        # named "forge". Read that one, by name, rather than any parent's origin.
-        folder, remote = root, "forge"
+        return ""
     done = subprocess.run(  # noqa: S603, S607
         ["git", "-C", str(folder), "remote", "get-url", remote],
         capture_output=True,
