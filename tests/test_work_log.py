@@ -15,7 +15,7 @@ from projecthub.mcp import work as L
 
 SECRET = "the private resume note 7f3a"
 SHA = "0123456789abcdef0123456789abcdef01234567"
-BOARD_FIELDS = {"Status", "Claimed", "Agent", "Last activity"}
+BOARD_FIELDS = {"Status", "Claimed", "Agent", "Last activity", "Claim expires"}
 
 
 class Clock:
@@ -49,14 +49,17 @@ def _board(s: L.Store, key: str) -> dict[str, object]:
 
 def test_acquire_queues_the_claim_for_the_board_in_one_write(store):
     s, clock = store
-    s.acquire("pkix", "a.b", "agent-1")
+    lease = s.acquire("pkix", "a.b", "agent-1")
     item = _board(s, "pkix:a.b")
+    token = L.claim_token("agent-1", lease.lease_id)
     assert item["payload"] == {
         "row_key": "pkix:a.b",
+        "claim": token,
         "fields": {
             "Status": "In progress",
             "Claimed": "1970-01-12",
-            "Agent": "agent-1",
+            "Agent": token,
+            "Claim expires": L._iso(lease.expires_at),
             "Last activity": f"acquire {L._iso(clock.t)}",
         },
     }
@@ -93,7 +96,8 @@ def test_repeated_updates_to_one_row_stay_one_pending_write(store):
     assert item["payload"]["fields"] == {
         "Status": "In review",
         "Claimed": "1970-01-12",
-        "Agent": "agent-1",
+        "Agent": L.claim_token("agent-1", lease.lease_id),
+        "Claim expires": L._iso(clock.t - 10 + L.DEFAULT_TTL),
         "Last activity": f"submit {L._iso(clock.t)}",
     }, "a later update keeps the fields an earlier one set"
 
@@ -111,9 +115,11 @@ def test_repeated_updates_to_one_row_stay_one_pending_write(store):
     s.note(lease.lease_id, "progress", "after the drain")
     again = _board(s, "pkix:a.b")
     assert again["id"] == fresh["id"], "the item keeps its outbox row"
-    assert set(again["payload"]["fields"]) == {"Last activity"}, (
-        "a drained write is replaced, not merged"
-    )
+    assert set(again["payload"]["fields"]) == {
+        "Last activity",
+        "Claim expires",
+        "Agent",
+    }, "a drained write is replaced, not merged"
     s.retry_later(int(again["id"]), 60)
     assert s.pending() == [], "not offered again before its retry time"
     clock.t += 61
@@ -167,7 +173,7 @@ def test_no_payload_carries_note_block_or_release_text(store):
         assert SECRET not in row["payload"], row["payload"]
         payload = json.loads(row["payload"])
         if "row_key" in payload:
-            assert set(payload) == {"row_key", "fields"}
+            assert set(payload) == {"row_key", "fields", "claim"}
             assert set(payload["fields"]) <= BOARD_FIELDS
     assert SECRET in json.dumps(s.log("pkix:a.b")), "the text stays in the local log"
 
@@ -335,8 +341,13 @@ def test_the_new_tools_have_schemas_never_destroy_and_never_write_a_roadmap(
     monkeypatch.setattr(paths, "ROOT", workspace)
     before = {p: p.read_bytes() for p in workspace.rglob("*") if p.is_file()}
 
-    s, _ = store
-    app = L.build(s, lambda project, row: "")
+    s, clock = store
+    import fakeboard as fb
+
+    board = fb.FakeBoard(fb.item("[pkix] a.b: x", Status="Ready"))
+    app = L.build(
+        s, lambda project, row: "", claims=fb.claimant(s, board, fb.Clock(clock.t))
+    )
     listed = anyio.run(app.list_tools)
     tools = {t.name: t for t in getattr(listed, "tools", listed)}
     for name in ("note", "park", "propose", "submit", "log"):
@@ -533,8 +544,13 @@ def test_acquire_takes_a_branch_over_mcp_and_the_command_line(
     pytest.importorskip("mcp")
     import anyio
 
-    s, _ = store
-    app = L.build(s, lambda project, row: "")
+    s, clock = store
+    import fakeboard as fb
+
+    board = fb.FakeBoard(fb.item("[pkix] a.b: x", Status="Ready"))
+    app = L.build(
+        s, lambda project, row: "", claims=fb.claimant(s, board, fb.Clock(clock.t))
+    )
     got = anyio.run(
         app.call_tool,
         "claim",
@@ -547,6 +563,11 @@ def test_acquire_takes_a_branch_over_mcp_and_the_command_line(
     monkeypatch.setattr(
         L, "_ready_from_planner", lambda p, r: "" if r == "a.b" else "not ready"
     )
+    cli_board = fb.FakeBoard(fb.item("[pkix] a.b: x", Status="Ready"))
+    monkeypatch.setattr(L, "board_client", lambda: (cli_board, ""))
+    from projecthub.github import claims as claims_module
+
+    monkeypatch.setattr(claims_module, "SETTLE_S", 0.5)
     assert L.main(["acquire", "pkix", "x.y"]) == 1
     assert "NOT_READY: not ready" in capsys.readouterr().err
     assert (

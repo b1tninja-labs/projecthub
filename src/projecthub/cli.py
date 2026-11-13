@@ -22,6 +22,10 @@ COMMANDS = {
         "projecthub.github.outbox",
         "send queued board updates to the GitHub Project, paced; --dry-run prints them",
     ),
+    "budget": (
+        "projecthub.github.ratebudget",
+        "the GitHub API rate budget: GraphQL points and REST requests left",
+    ),
     "deps": ("projecthub.deps", "dependency state from disk"),
     "pickup": (
         "projecthub.mcp.loop",

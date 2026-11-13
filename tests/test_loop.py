@@ -413,7 +413,10 @@ def test_blockings_reports_a_dependency_that_is_only_a_shell(monkeypatch):
 
 
 class Claims:
-    """A lease store in memory: the first claim on a key wins."""
+    """A claimant in memory: the first claim on a key wins, and a later one is refused LEASE_HELD.
+
+    Exclusion in pickup comes from the cards, never from here: `live_keys` and `blocked_keys` are gone
+    on purpose, so a pickup that still asked a local store would fail with AttributeError."""
 
     def __init__(
         self, held: tuple[str, ...] = (), blocked: tuple[str, ...] = ()
@@ -421,13 +424,11 @@ class Claims:
         self.held = set(held)
         self.blocked = set(blocked)
 
-    def live_keys(self) -> set[str]:
-        return set(self.held)
-
-    def blocked_keys(self) -> set[str]:
-        return set(self.blocked)
-
     def acquire(self, project: str, row: str, who: str) -> types.SimpleNamespace:
+        from projecthub.mcp import work
+
+        if f"{project}:{row}" in self.held:
+            raise work.LeaseError("LEASE_HELD", f"{project}:{row} is claimed")
         self.held.add(f"{project}:{row}")
         return types.SimpleNamespace(lease_id="L1", expires_at=1_800_000_000.0, who=who)
 
@@ -529,10 +530,15 @@ def test_a_row_with_no_packet_is_passed_over():
 
 
 def test_a_blocked_row_waits_for_a_person():
-    store = Claims(blocked=("pkix:anchors.load_anchor",))
-    code, text = pickup(BOARD_CARDS, store)
-    assert code == 0 and "pkix:chain.build" not in store.blocked
-    assert store.held == {"pkix:chain.build"}
+    store = Claims()
+    cards = [
+        project("pkix", active=True),
+        row("anchors.load_anchor()", "Blocked", "pkix"),
+        row("chain.build()", "Backlog", "pkix"),
+    ]
+    code, text = pickup(cards, store)
+    assert code == 0
+    assert store.held == {"pkix:chain.build"}, "Blocked on the Project is not startable"
 
 
 def test_a_card_in_the_shared_repository_belongs_to_its_title_prefix(monkeypatch):

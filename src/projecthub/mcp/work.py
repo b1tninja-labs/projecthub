@@ -1,5 +1,12 @@
 """Leases: who is working on which ROADMAP row right now, minted by the server and expiring on their own.
 
+The authority is GitHub Project 1. A claim is decided there, synchronously, by github/claims.py: Agent,
+Claimed, Status and Claim expires are written, the item is re-read, and the claim stands only if it still
+names this lease. This file keeps the local half: a mirror of each won claim (so the lease id stays the
+capability every other tool takes, and those tools keep working offline), the event log whose text never
+leaves the machine, and the outbox that carries every later board write. With no network a claim is refused,
+never faked.
+
 Why not the GitHub assignee. Every agent session here acts as the same account, so `claim()` could not
 tell two agents apart: the second one read "already yours". A lease is a server-minted opaque handle
 (UUIDv4) with a time to live. Holding the handle is the capability: heartbeat, release and block all
@@ -49,9 +56,19 @@ import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from projecthub.github.claims import ProjectClaims
 
 DEFAULT_DB = paths.state_dir() / "leases.sqlite"
+
+
+def default_db() -> pathlib.Path:
+    """The store file every process on this machine shares: PROJECTHUB_LEASES_DB, else the state directory."""
+    return pathlib.Path(paths.env("LEASES_DB") or DEFAULT_DB)
+
+
 DEFAULT_TTL = 30 * 60
 MAX_TTL = 4 * 60 * 60
 OUTCOMES = ("handoff", "pr_opened", "abandoned", "parked")
@@ -62,6 +79,7 @@ SINKS = ("board", "site")
 ESCALATE_AFTER = 2
 SHA = re.compile(r"[0-9a-f]{40}")
 
+CLAIM_EXPIRES = "Claim expires"
 # What the board shows for each release outcome. Every event also sets "Last activity".
 RELEASE_STATUS = {
     "handoff": "Ready",
@@ -69,6 +87,8 @@ RELEASE_STATUS = {
     "parked": "Ready",
     "pr_opened": "In review",
 }
+# The outcomes that keep the holder's name on the item: the work is still theirs, waiting on review.
+KEEPS_AGENT = ("pr_opened",)
 # The event kinds whose text the next holder of a row should read first, beside every note:* kind.
 HANDOFF_KINDS = ("release:handoff", "release:parked")
 
@@ -158,7 +178,7 @@ class Store:
     def __init__(
         self, path: pathlib.Path | None = None, now: Callable[[], float] = time.time
     ) -> None:
-        self.path = path or pathlib.Path(paths.env("LEASES_DB") or DEFAULT_DB)
+        self.path = path or default_db()
         self.now = now
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
@@ -194,14 +214,14 @@ class Store:
         for row in db.execute(
             "SELECT lease_id, row_key FROM leases WHERE state='live' AND expires_at <= ?",
             (now,),
-        ):
+        ).fetchall():
             self._event(
                 db,
                 row["lease_id"],
                 row["row_key"],
                 "expire",
                 "no heartbeat within the TTL",
-                {"Status": "Ready"},
+                {"Status": "Ready", "Agent": None, CLAIM_EXPIRES: None},
             )
         db.execute(
             "UPDATE leases SET state='expired' WHERE state='live' AND expires_at <= ?",
@@ -217,20 +237,89 @@ class Store:
         detail: str,
         fields: dict[str, str | None] | None = None,
         refs: list[str] | None = None,
+        queue: bool = True,
     ) -> None:
         """Append an event and, in the same transaction, its board write: `fields` plus Last activity.
 
         `detail` stays in this file. The board payload is built only from `fields`, which callers fill with
         statuses, dates and holders, and from the event kind and time. A field set to None asks the drain
-        to clear it.
+        to clear it. An event under a lease carries that claim's token as `claim`, and the drain writes it only
+        to an item whose Agent is empty or is that token, so a claim lost on the Project is never overwritten.
         """
         at = self.now()
         db.execute(
             "INSERT INTO events(at, lease_id, row_key, kind, detail, refs) VALUES (?, ?, ?, ?, ?, ?)",
             (at, lease_id, key, kind, detail, json.dumps(refs) if refs else None),
         )
+        if not queue:
+            return
         board = {**(fields or {}), "Last activity": f"{kind} {_iso(at)}"}
-        self.enqueue(db, "board", key, {"row_key": key, "fields": board})
+        payload: dict[str, object] = {"row_key": key, "fields": board}
+        if lease_id:
+            held = db.execute(
+                "SELECT holder FROM leases WHERE lease_id=?", (lease_id,)
+            ).fetchone()
+            if held is not None:
+                payload["claim"] = claim_token(held["holder"], lease_id)
+        self.enqueue(db, "board", key, payload)
+
+    def record(self, lease_id: str | None, key: str, kind: str, detail: str) -> None:
+        """A local event with no board write: what happened here that the Project must not hear from us."""
+        with self._write() as db:
+            self._event(db, lease_id, key, kind, detail, queue=False)
+
+    def lease(self, lease_id: str) -> Lease | None:
+        db = self._connect()
+        try:
+            r = db.execute(
+                "SELECT * FROM leases WHERE lease_id=?", (lease_id,)
+            ).fetchone()
+        finally:
+            db.close()
+        if r is None:
+            return None
+        return Lease(
+            r["lease_id"],
+            r["row_key"],
+            r["holder"],
+            json.loads(r["scope_files"]),
+            r["acquired_at"],
+            r["expires_at"],
+            r["state"],
+            r["branch"] or "",
+        )
+
+    def ended_here(self, token: str) -> bool:
+        """True when `token` names a lease this store holds and has already ended: the Project still shows
+        the claim only because the outbox has not drained yet."""
+        holder, sep, tail = token.rpartition(" [")
+        if not sep or not tail.endswith("]"):
+            return False
+        prefix = tail[:-1]
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT state FROM leases WHERE holder=? AND substr(lease_id, 1, ?)=?",
+                (holder, len(prefix), prefix),
+            ).fetchall()
+        finally:
+            db.close()
+        return bool(rows) and all(r["state"] != "live" for r in rows)
+
+    def lose(self, lease_id: str, rival: str) -> None:
+        """End a mirror lease whose claim another holder now has on the Project. Nothing is queued: the item
+        is theirs, and a write from here would undo their claim."""
+        with self._write() as db:
+            found = db.execute(
+                "SELECT row_key FROM leases WHERE lease_id=?", (lease_id,)
+            ).fetchone()
+            if found is None:
+                raise LeaseError("LEASE_UNKNOWN", f"no lease {lease_id}")
+            db.execute(
+                "UPDATE leases SET state='released', outcome='lost', note=? WHERE lease_id=?",
+                (f"claimed by {rival}", lease_id),
+            )
+            self._event(db, lease_id, found["row_key"], "lost", rival, queue=False)
 
     def enqueue(
         self, db: sqlite3.Connection, sink: str, key: str, payload: dict[str, object]
@@ -290,12 +379,21 @@ class Store:
         ttl: float = DEFAULT_TTL,
         max_live: int = 1,
         branch: str = "",
+        *,
+        lease_id: str | None = None,
+        mirror: bool = False,
+        acquired_at: float | None = None,
     ) -> Lease:
         """A new lease on a row with no live lease. Readiness is the caller's check; this one is exclusivity.
 
         A holder may hold `max_live` live leases at once, one by default, so an agent finishes, parks or
         blocks a row before it takes the next. `branch` names the branch the work lands on: the evidence worker accepts
         a submitted commit only if it is reachable from main, master or this branch.
+
+        `mirror=True` is the claim protocol's call (github/claims.py): the Project already shows this claim, so
+        nothing is queued, the exclusivity and busy checks were made on the Project, and a stale local lease on
+        the row is superseded rather than obeyed. Without it this is a local-only lease, kept for the store's
+        own tests and tools; no tool claims that way any more.
         """
         key = row_key(project, row_id)
         span = max(60.0, min(float(ttl), MAX_TTL))
@@ -305,7 +403,20 @@ class Store:
                 "SELECT lease_id, holder, expires_at FROM leases WHERE row_key=? AND state='live'",
                 (key,),
             ).fetchone()
-            if held is not None:
+            if held is not None and mirror:
+                db.execute(
+                    "UPDATE leases SET state='expired' WHERE lease_id=?",
+                    (held["lease_id"],),
+                )
+                self._event(
+                    db,
+                    held["lease_id"],
+                    key,
+                    "superseded",
+                    "the Project shows a newer claim",
+                    queue=False,
+                )
+            elif held is not None:
                 raise LeaseError(
                     "LEASE_HELD",
                     f"{key} is leased by {held['holder']} until {_iso(held['expires_at'])}",
@@ -314,15 +425,15 @@ class Store:
                 "SELECT row_key FROM leases WHERE holder=? AND state='live' ORDER BY row_key",
                 (holder,),
             ).fetchall()
-            if len(mine) >= max(1, max_live):
+            if not mirror and len(mine) >= max(1, max_live):
                 raise LeaseError(
                     "HOLDER_BUSY",
                     f"{holder} already holds {', '.join(r['row_key'] for r in mine)}; "
                     "release, park or block it first",
                 )
-            now = self.now()
+            now = self.now() if acquired_at is None else acquired_at
             lease = Lease(
-                str(uuid.uuid4()),
+                lease_id or str(uuid.uuid4()),
                 key,
                 holder,
                 sorted(scope_files or []),
@@ -354,17 +465,31 @@ class Store:
                 {
                     "Status": "In progress",
                     "Claimed": time.strftime("%Y-%m-%d", time.gmtime(now)),
-                    "Agent": holder,
+                    "Agent": claim_token(holder, lease.lease_id),
+                    CLAIM_EXPIRES: _iso(lease.expires_at),
                 },
+                queue=not mirror,
             )
             return lease
 
     def heartbeat(self, lease_id: str) -> float:
+        """Extend a live lease by its TTL and queue the new Claim expires for the Project."""
         with self._write() as db:
             found = self._live(db, lease_id)
             expires = self.now() + found["ttl"]
             db.execute(
                 "UPDATE leases SET expires_at=? WHERE lease_id=?", (expires, lease_id)
+            )
+            self._event(
+                db,
+                lease_id,
+                found["row_key"],
+                "heartbeat",
+                "",
+                {
+                    "Agent": claim_token(found["holder"], lease_id),
+                    CLAIM_EXPIRES: _iso(expires),
+                },
             )
             return expires
 
@@ -396,7 +521,7 @@ class Store:
                 found["row_key"],
                 f"release:{outcome}",
                 note or pr_url,
-                {"Status": RELEASE_STATUS[outcome]},
+                release_fields(outcome),
             )
             return "released"
 
@@ -418,7 +543,12 @@ class Store:
                 (f"{kind}: {detail}", lease_id),
             )
             self._event(
-                db, lease_id, key, f"block:{kind}", detail, {"Status": "Blocked"}
+                db,
+                lease_id,
+                key,
+                f"block:{kind}",
+                detail,
+                {"Status": "Blocked", CLAIM_EXPIRES: None},
             )
             times = db.execute(
                 "SELECT COUNT(*) FROM events WHERE row_key=? AND kind=?",
@@ -445,7 +575,12 @@ class Store:
                 (reason, lease_id),
             )
             self._event(
-                db, lease_id, found["row_key"], "steal", reason, {"Status": "Ready"}
+                db,
+                lease_id,
+                found["row_key"],
+                "steal",
+                reason,
+                {"Status": "Ready", "Agent": None, CLAIM_EXPIRES: None},
             )
             return "released"
 
@@ -467,7 +602,16 @@ class Store:
                 "UPDATE leases SET expires_at=? WHERE lease_id=?", (expires, lease_id)
             )
             self._event(
-                db, lease_id, found["row_key"], f"note:{kind}", text, refs=refs or []
+                db,
+                lease_id,
+                found["row_key"],
+                f"note:{kind}",
+                text,
+                {
+                    "Agent": claim_token(found["holder"], lease_id),
+                    CLAIM_EXPIRES: _iso(expires),
+                },
+                refs=refs or [],
             )
             return {
                 "lease_id": lease_id,
@@ -722,6 +866,22 @@ def _iso(stamp: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stamp))
 
 
+def claim_token(holder: str, lease_id: str) -> str:
+    """What a claim writes to Agent: the holder's name and the start of its lease id (github/claims.py)."""
+    return f"{holder} [{lease_id[:8]}]"
+
+
+def release_fields(outcome: str) -> dict[str, str | None]:
+    """The Project fields a release writes: its Status, no Claim expires, and no Agent where the work goes back."""
+    fields: dict[str, str | None] = {
+        "Status": RELEASE_STATUS[outcome],
+        CLAIM_EXPIRES: None,
+    }
+    if outcome not in KEEPS_AGENT:
+        fields["Agent"] = None
+    return fields
+
+
 # -- the opt-in MCP server ----------------------------------------------------------------------------
 
 
@@ -782,9 +942,11 @@ class LogOut(TypedDict):
 
 
 INSTRUCTIONS = (
-    "projecthub work log: leases on ROADMAP rows. Acquire one before working a row the planner lists as ready "
-    f"(one live lease per holder), heartbeat it at least every {DEFAULT_TTL // 60} minutes (the default TTL) or "
-    "log a note, which also extends it, and end it with release (handoff, pr_opened, abandoned), park (with a "
+    "projecthub work log: claims on GitHub Project 1 items, mirrored as local leases. Claim one before working "
+    "a row the planner lists as ready (one live claim per holder); the claim is written to the Project and "
+    "re-read, and LEASE_HELD means someone else holds it or won the race. Offline, claim is refused (OFFLINE) "
+    f"and every other tool still works. Heartbeat at least every {DEFAULT_TTL // 60} minutes (the default TTL) or "
+    "log a note, which also extends it; LEASE_LOST means stop. End it with release (handoff, pr_opened, abandoned), park (with a "
     "resume note) or block. Propose new work you find; it goes to the owner's Triage. Submit a full commit sha "
     "for an evidence check when the work is ready. Nothing here marks a row done or edits ROADMAP.md: done is "
     "decided only by an evidence check. Note text stays on this machine. If the same block recurs, stop and "
@@ -792,13 +954,36 @@ INSTRUCTIONS = (
 )
 
 
-def build(store: Store | None = None, ready: Callable[[str, str], str] | None = None):  # type: ignore[no-untyped-def]
-    """The projecthub-work server. `ready(project, row_id)` returns "" if the row may be leased, else why not."""
+def board_client() -> tuple[object | None, str]:
+    """(the GitHub client claims are made through, why there is none). PROJECTHUB_OFFLINE=1 means none."""
+    if paths.env("OFFLINE"):
+        return None, "PROJECTHUB_OFFLINE is set"
+    from projecthub.github.client import Projects
+
+    return Projects(), ""
+
+
+def claims_for(store: Store) -> ProjectClaims:
+    """The Project-backed claimant for `store`, through the default client."""
+    from projecthub.github.claims import ProjectClaims
+
+    client, why = board_client()
+    return ProjectClaims(store, client, offline_reason=why)  # type: ignore[arg-type]
+
+
+def build(  # type: ignore[no-untyped-def]
+    store: Store | None = None,
+    ready: Callable[[str, str], str] | None = None,
+    claims: ProjectClaims | None = None,
+):
+    """The projecthub-work server. `ready(project, row_id)` returns "" if the row may be leased, else why not.
+    `claims` decides claims on the Project; by default it is built over `store` and the gh client."""
     from mcp.server.mcpserver import MCPServer
     from mcp.server.mcpserver.exceptions import ToolError
     from mcp.types import ToolAnnotations
 
     leases = store or Store()
+    board = claims or claims_for(leases)
     check = ready or _ready_from_planner
     app = MCPServer(name="projecthub-work", instructions=INSTRUCTIONS)
     write = ToolAnnotations(
@@ -823,9 +1008,12 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
     @app.tool(
         name="claim",
         description=(
-            f"Lease a ready row. TTL defaults to {DEFAULT_TTL}s and is capped at {MAX_TTL}s; heartbeat before it "
-            "runs out. Refuses a row that is not ready (inactive project, plan directory, unbuilt dependency) or "
-            "already leased. scope_files is advisory: the files you expect to touch."
+            f"Claim a ready row on GitHub Project 1. TTL defaults to {DEFAULT_TTL}s and is capped at {MAX_TTL}s; "
+            "heartbeat before it runs out. Writes Agent, Claimed, Status In progress and Claim expires, re-reads "
+            "the item, and returns a lease id only when the claim stood. Refuses NOT_READY (inactive project, plan "
+            "directory, unbuilt dependency, declared non-goal), LEASE_HELD (claimed by someone else, or lost the "
+            "race), HOLDER_BUSY, OFFLINE (the Project cannot be reached; nothing is claimed) and RATE_BUDGET_LOW. "
+            "scope_files is advisory: the files you expect to touch."
         ),
         annotations=write,
         structured_output=True,
@@ -842,7 +1030,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
         if why:
             raise ToolError(f"NOT_READY: {why}")
         lease = guarded(
-            lambda: leases.acquire(
+            lambda: board.acquire(
                 project, row_id, holder, scope_files, ttl_s, branch=branch
             )
         )
@@ -856,19 +1044,26 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
 
     @app.tool(
         name="heartbeat",
-        description="Extend a live lease by its TTL. An expired lease is an error: LEASE_EXPIRED.",
+        description=(
+            "Extend a live claim by its TTL; the new Claim expires reaches the Project through the outbox. "
+            "LEASE_EXPIRED: the lease ran out. LEASE_LOST: the Project shows someone else's claim now; stop."
+        ),
         annotations=write,
         structured_output=True,
     )
     def heartbeat_tool(lease_id: str) -> HeartbeatOut:
         return {
             "lease_id": lease_id,
-            "expires_at": _iso(guarded(lambda: leases.heartbeat(lease_id))),
+            "expires_at": _iso(guarded(lambda: board.heartbeat(lease_id))),
         }
 
     @app.tool(
         name="release",
-        description="End a lease: outcome handoff, pr_opened (needs pr_url), abandoned or parked (needs a note). The row is free again.",
+        description=(
+            "End a claim: outcome handoff, pr_opened (needs pr_url), abandoned or parked (needs a note). The Project "
+            "gets Status Ready (In review for pr_opened) and loses Claim expires; Agent is cleared except on "
+            "pr_opened. Queued through the outbox, so it works offline."
+        ),
         annotations=write,
         structured_output=True,
     )
@@ -883,7 +1078,8 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
     @app.tool(
         name="block",
         description=(
-            "Mark a leased row blocked: kind dependency, spec_question, decision_needed or env, with what blocks it. "
+            "Mark a claimed row blocked: kind dependency, spec_question, decision_needed or env, with what blocks it. "
+            "The Project gets Status Blocked and loses Claim expires; Agent stays, to show who is waiting. "
             "needs_a_person=true means stop: the same block recurred, or a decision is required."
         ),
         annotations=write,
@@ -894,7 +1090,7 @@ def build(store: Store | None = None, ready: Callable[[str, str], str] | None = 
 
     @app.tool(
         name="leases",
-        description="Live leases and the most recent lease events.",
+        description="This machine's mirror of live claims, and the most recent lease events. The Project is the authority.",
         annotations=read,
         structured_output=True,
     )
@@ -1021,6 +1217,8 @@ def main(argv: list[str]) -> int:
                 f"{lease.row_key}  {lease.holder}  until {_iso(lease.expires_at)}  {lease.lease_id}"
             )
         return 0
+    if argv[0] == "ensure-claim-field":
+        return _ensure_claim_field()
     if argv[0] == "steal" and len(argv) >= 2:
         print(store.steal(argv[1], " ".join(argv[2:]) or "stolen by a person"))
         return 0
@@ -1029,7 +1227,7 @@ def main(argv: list[str]) -> int:
     if argv[0] in WORK_COMMANDS:
         return _work(store, argv)
     print(
-        "usage: projecthub leases [list | steal <lease_id> [reason] | heartbeat <lease_id>\n"
+        "usage: projecthub leases [list | steal <lease_id> [reason] | heartbeat <lease_id> | ensure-claim-field\n"
         "         | acquire <project> <row_id> [--holder H] [--branch B] [--ttl S] [--scope FILE]...\n"
         "         | release <lease_id> <outcome> [--note TEXT] [--pr-url URL]\n"
         "         | block <lease_id> <kind> <detail>\n"
@@ -1090,7 +1288,7 @@ def _work(store: Store, argv: list[str]) -> int:
             why = _ready_from_planner(args.project, args.row_id)
             if why:
                 raise LeaseError("NOT_READY", why)
-            lease = store.acquire(
+            lease = claims_for(store).acquire(
                 args.project,
                 args.row_id,
                 args.holder,
@@ -1141,7 +1339,7 @@ def _finish(store: Store, argv: list[str]) -> int:
     command, lease_id, *rest = argv
     try:
         if command == "heartbeat":
-            print(f"renewed until {_iso(store.heartbeat(lease_id))}")
+            print(f"renewed until {_iso(claims_for(store).heartbeat(lease_id))}")
         elif command == "release":
             parser = argparse.ArgumentParser(prog="projecthub leases release")
             parser.add_argument("outcome")
@@ -1164,6 +1362,23 @@ def _finish(store: Store, argv: list[str]) -> int:
     except LeaseError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _ensure_claim_field() -> int:
+    """A person's one-time step: create the Claim expires field on the Project when it is missing."""
+    from projecthub import config
+    from projecthub.github.claims import ensure_claim_field
+    from projecthub.github.client import GhProjectsError, Projects
+
+    try:
+        _, created = ensure_claim_field(Projects())
+    except GhProjectsError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(
+        f"{'created' if created else 'already present'}: {CLAIM_EXPIRES!r} on {config.BOARD_URL}"
+    )
     return 0
 
 

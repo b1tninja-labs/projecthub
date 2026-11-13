@@ -1,10 +1,11 @@
 # projecthub
 
-A local planning database for coding agents. Agents read and change the plan through tools, never through a
-markdown file: typed entries (epics, obligations, tasks, bugs, questions, decisions, findings, rules), links
-between them, and citations that are checked against the source. An obligation is done when an evidence record
-says so: its named test exists, passes, fails on the old code, asserts something, and catches a planted bug.
-GitHub Projects is the display and the off-machine copy.
+Planning for coding agents, kept on GitHub Project 1: the Project holds every issue, its Status and milestone,
+who is working on it and when they last touched it, and agents claim, track and finish work there the way a team
+uses a Jira board. The local SQLite store is only a write queue for the Project and a short-lived read cache, and
+note text stays in it, never published. Agents change the plan through tools, as typed entries with links and
+citations checked against the source, and an obligation is done only when an evidence record says its named test
+exists, passes, fails on the old code, asserts something and catches a planted bug.
 
 ```bash
 pip install -e ".[dev]"

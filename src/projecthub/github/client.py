@@ -137,6 +137,9 @@ def gh_runner(argv: list[str], stdin: str | None = None) -> Completed:
     rewritten, and clean bytes pass through this function unchanged.
     """
     global _PLAIN_ARGS  # noqa: PLW0603 - one process-wide flag beats re-detecting on every request
+    if os.environ.get("PROJECTHUB_OFFLINE"):
+        # Offline mode, and every test run: nothing reaches GitHub, and a caller sees why.
+        raise GhProjectsError("offline: PROJECTHUB_OFFLINE is set, so gh is not run")
     exe = shutil.which("gh")
     if not exe:
         raise GhProjectsError("gh is not on PATH; install it and run gh auth login")
@@ -295,7 +298,11 @@ class Projects:
     def graphql_partial(
         self, query: str, variables: dict[str, object] | None = None
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        body = json.dumps({"query": query, "variables": variables or {}})
+        from projecthub.github import ratebudget
+
+        mutation = query.lstrip().startswith("mutation")
+        sent = ratebudget.with_rate_limit(query)
+        body = json.dumps({"query": sent, "variables": variables or {}})
         done = self._run(["api", "graphql", "--input", "-"], body)
         for pause in (2, 8):
             if done.code == 0 or not any(t in done.err for t in TRANSIENT):
@@ -315,7 +322,13 @@ class Projects:
                 f"no usable response (exit {done.code}): {done.err.strip()[:300]}"
             )
         errors = [e for e in payload.get("errors") or [] if isinstance(e, dict)]
-        return payload.get("data") or {}, errors
+        data = payload.get("data") or {}
+        if isinstance(data, dict) and isinstance(data.get("rateLimit"), dict):
+            ratebudget.BUDGET.observe_graphql(data["rateLimit"])
+        elif mutation:
+            # A Mutation has no rateLimit field; count it so the budget does not read as untouched.
+            ratebudget.BUDGET.charge(1)
+        return data, errors
 
     def _error(self, error: dict[str, Any]) -> GhProjectsError:
         kind = str(error.get("type", ""))
@@ -337,11 +350,18 @@ class Projects:
         if self._scopes is False:
             done = self._run(["api", "-i", "user"], None)
             found: tuple[str, ...] | None = None
+            headers: dict[str, str] = {}
             for line in done.out.splitlines():
                 name, _, value = line.partition(":")
                 if name.strip().lower() == "x-oauth-scopes":
                     found = tuple(s.strip() for s in value.split(",") if s.strip())
+                if name.strip().lower().startswith("x-ratelimit-"):
+                    headers[name.strip()] = value.strip()
             self._scopes = found
+            if headers:
+                from projecthub.github import ratebudget
+
+                ratebudget.BUDGET.observe_headers(headers)
         return self._scopes if isinstance(self._scopes, tuple) else None
 
     def require(self, write: bool = False) -> None:
@@ -353,9 +373,33 @@ class Projects:
             raise MissingScope(acceptable[-1] if write else READ_SCOPES[0], granted)
 
     def rate_limit(self) -> tuple[int, str]:
-        data = self.graphql("{ rateLimit { remaining resetAt } }")
+        data = self.graphql("{ rateLimit { limit cost remaining resetAt } }")
         limit = data["rateLimit"]
         return int(limit["remaining"]), str(limit["resetAt"])
+
+    def rest_rate_limit(self) -> dict[str, Any]:
+        """GET /rate_limit, which GitHub does not count against the primary REST limit. Feeds the budget."""
+        from projecthub.github import ratebudget
+
+        done = self._run(["api", "rate_limit"], None)
+        try:
+            listed = json.loads(done.out or "null")
+        except json.JSONDecodeError:
+            listed = None
+        if not isinstance(listed, dict):
+            raise GhProjectsError(
+                f"could not read the REST rate limit: {done.err.strip()[:200]}"
+            )
+        core = (listed.get("resources") or {}).get("core") or {}
+        ratebudget.BUDGET.observe_headers(
+            {
+                "x-ratelimit-resource": "core",
+                "x-ratelimit-limit": str(core.get("limit", "")),
+                "x-ratelimit-remaining": str(core.get("remaining", "")),
+                "x-ratelimit-reset": str(core.get("reset", "")),
+            }
+        )
+        return dict(core)
 
     def guard(self, needed: int) -> None:
         remaining, reset_at = self.rate_limit()
@@ -477,6 +521,31 @@ class Projects:
                     )
                 )
         return out
+
+    def item(self, item_id: str) -> Item:
+        """One item, read fresh by node id: one point. The claim protocol reads this before and after it writes."""
+        self.require()
+        data = self.graphql(
+            f"query($id: ID!) {{ node(id: $id) {{ ... on ProjectV2Item {{ id type {_CONTENT} {_VALUES} }} }} }}",
+            {"id": item_id},
+        )
+        node = data.get("node") or {}
+        if not node.get("id"):
+            raise NotFound(f"no project item {item_id!r}")
+        content = node.get("content") or {}
+        return Item(
+            id=node["id"],
+            type=node.get("type", ""),
+            content_id=content.get("id", ""),
+            url=content.get("url", ""),
+            title=content.get("title", ""),
+            values=_values(node.get("fieldValues")),
+            truncated=bool(
+                ((node.get("fieldValues") or {}).get("pageInfo") or {}).get(
+                    "hasNextPage"
+                )
+            ),
+        )
 
     def linked_ids(self, issue_id: str, connection: str) -> set[str]:
         """Node ids on an issue's `subIssues` or `blockedBy` connection, every page of it.
@@ -647,6 +716,19 @@ class Projects:
                 for i, (change, _, _) in enumerate(chunk)
             ]
         return outcomes
+
+    def dispatch(
+        self, repo: str, event_type: str, client_payload: dict[str, object]
+    ) -> None:
+        """POST a repository_dispatch event. Needs a token that may write the repository's contents."""
+        done = self._run(
+            ["api", "-X", "POST", f"repos/{repo}/dispatches", "--input", "-"],
+            json.dumps({"event_type": event_type, "client_payload": client_payload}),
+        )
+        if done.code != 0:
+            raise GhProjectsError(
+                f"repository_dispatch to {repo} refused: {(done.out or done.err).strip()[:300]}"
+            )
 
     # -- schema and layout -------------------------------------------------------------------------
 
