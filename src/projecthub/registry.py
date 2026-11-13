@@ -139,13 +139,14 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "registration data: an RFC 2167 RWhois client and server, plus experimental WHOIS and RDAP behind one lookup model",
         "PORTFOLIO.md s3 (implemented, not yet sequenced into a tier)",
     ),
-    "sdk-forge": (
+    # sdk-forge until 2026-11-12, when it was retired into this repository (PORTFOLIO.md s9 item 12).
+    "projecthub": (
         "Tooling",
         0,
         0,
-        "sdk-forge",
-        "generator, gates and planning tools",
-        "PORTFOLIO.md s3 'Tooling'",
+        "projecthub",
+        "the planning system, the shell generator, its gates and the git hook",
+        "PORTFOLIO.md s3 'Tooling', s9 item 12",
     ),
     # Decided 2026-11-12: a tool for the router firmware build, not a library the portfolio depends on.
     "kconfigpy": (
@@ -278,11 +279,7 @@ def github_repo(root: pathlib.Path, directory: str) -> str:
     folder = root / directory
     remote = "origin"
     if not (folder / ".git").exists():
-        if directory != "sdk-forge":
-            return ""
-        # sdk-forge is a directory of the workspace repository, which publishes to GitHub through a remote
-        # named "forge". Read that one, by name, rather than any parent's origin.
-        folder, remote = root, "forge"
+        return ""
     done = subprocess.run(  # noqa: S603, S607
         ["git", "-C", str(folder), "remote", "get-url", remote],
         capture_output=True,
