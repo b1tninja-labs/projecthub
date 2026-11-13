@@ -1714,7 +1714,7 @@ If the person gave you a task, do that task.
 
 If you arrived with nothing to do, run this from this directory:
 
-    projecthub pickup --who <your name> --project <<NAME>>
+    python -m projecthub pickup --who <your name> --project <<NAME>>
 
 Its output is your assignment: one row, already claimed for you, with what to build, the commands that prove
 it and the ways to end it. The board decides the order of work, so the row it gives you is the row to work,
