@@ -122,6 +122,26 @@ def verdict(simple: int, code: int) -> str:
     return "UNKNOWN"
 
 
+def live_neighbours(name: str, namespace: set) -> list[str]:
+    """The live names one keystroke from `name`, after PEP 503 normalisation, sorted."""
+    return sorted(n for n in neighbours(canonical(name)) if n in namespace)
+
+
+def overall(probe_verdict: str, live: list[str] | None) -> str:
+    """One word the portfolio rule can be read from: TAKEN, NEIGHBOUR, FREE, or FREE-UNCHECKED.
+
+    `probe_verdict` says only whether the exact name is free on PyPI; the rule (PORTFOLIO.md section 10,
+    2026-11-07: `zimlib`, `zimdoc`, `zimdocs`, `zimdex`) also refuses a name with a live one-keystroke neighbour.
+    `live` is None when no namespace snapshot was consulted, which cannot be called FREE. A name that is not
+    free for any other reason (reserved, error, rate-limited) keeps that reason, since it is not a name to use.
+    """
+    if probe_verdict != "FREE":
+        return probe_verdict
+    if live is None:
+        return "FREE-UNCHECKED"
+    return "NEIGHBOUR" if live else "FREE"
+
+
 def neighbours(name: str, limit: int = 1) -> set:
     """Every spelling within `limit` single edits, as a set.
 
@@ -412,6 +432,9 @@ def main(argv: list[str] | None = None) -> int:
     if not names:
         parser.error("no names given; pass names or --portfolio PATH")
 
+    if any(not n.strip() for n in names):
+        parser.error("an empty or whitespace-only name is not a name")
+
     problems = check_canaries()
     if problems:
         for problem in problems:
@@ -419,6 +442,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     rows = [probe(name) for name in dict.fromkeys(names)]
+    for row in rows:
+        row["overall"] = overall(row["verdict"], None)
     blocked = {}
     for row in rows:
         if row["name"] != row["canonical"]:
@@ -433,7 +458,8 @@ def main(argv: list[str] | None = None) -> int:
         for row in rows:
             if row["verdict"] != "FREE":
                 continue
-            live = sorted(n for n in neighbours(row["canonical"]) if n in namespace)
+            live = live_neighbours(row["canonical"], namespace)
+            row["overall"] = overall(row["verdict"], live)
             peers = sorted(
                 n
                 for n in neighbours(row["canonical"])
@@ -466,7 +492,8 @@ def main(argv: list[str] | None = None) -> int:
                     + str(row.get("summary"))
                 )
             print(
-                "{:<18} canonical={:<18} simple={:<4} json={:<4} {:<14} {}{}".format(
+                "{:<14} {:<18} canonical={:<18} simple={:<4} json={:<4} {:<14} {}{}".format(
+                    row["overall"],
                     row["name"],
                     row["canonical"],
                     row["simple"],

@@ -283,7 +283,7 @@ PROJECTS: list[dict[str, Any]] = [
             "ignores OpenPGP. pgpenv is scoped to the message and key layer: correct packets, "
             "honest verification, no daemon.",
         ),
-        "deps": [("cryptography", "50.0.2")],
+        "deps": [("cryptography", "42.0")],
         "deps_note": (
             "OpenPGP without an AEAD, HKDF and EdDSA backend means writing those primitives, "
             "which is a worse project than this one. One pinned dependency with no ceiling."
@@ -653,7 +653,7 @@ PROJECTS: list[dict[str, Any]] = [
             "M5 interop against a captured carrier trace",
             "M6 publication: 0.1.0",
         ],
-        "extras": {"crypto": [("cryptography", "50.0.2")]},
+        "extras": {"crypto": [("cryptography", "42.0")]},
         "cli": "shaken verify --request capture.txt --ca ./sti-ca.pem",
     },
     {
@@ -858,7 +858,7 @@ PROJECTS: list[dict[str, Any]] = [
             "M5 DTLS key export and profile negotiation policy",
             "M6 publication: 0.1.0 with a loopback call against a real RTP stack",
         ],
-        "extras": {"crypto": [("cryptography", "50.0.2")], "rtp": [("aiortp", "0.8")]},
+        "extras": {"crypto": [("cryptography", "42.0")], "rtp": [("aiortp", "0.8")]},
         "cli": "python -m srtpkit bench --profile AES_128_GCM",
     },
     {
@@ -888,7 +888,7 @@ PROJECTS: list[dict[str, Any]] = [
             "AES; pkix deliberately owns the opposite half: decisions, not bytes, and "
             "primitives borrowed from cryptography rather than re-invented.",
         ),
-        "deps": [("cryptography", "50.0.2")],
+        "deps": [("cryptography", "42.0")],
         "deps_note": (
             "Signature verification is the one thing this project must not write itself. A "
             "path validator that re-implements RSA or ECDSA in Python turns a well studied "
@@ -1297,7 +1297,7 @@ PROJECTS: list[dict[str, Any]] = [
             "not compete with it: private and enterprise PKIs run CMP and EST, and today that "
             "means openssl CLI invocations or a Java stack.",
         ),
-        "deps": [("asn1crypto", "1.5.1"), ("cryptography", "50.0.2")],
+        "deps": [("asn1crypto", "1.5.1"), ("cryptography", "42.0")],
         "deps_note": (
             "CMP messages are deep ASN.1 inside CMS. Writing that schema layer again would be "
             "the third Python implementation of the same structures, so definitions come from "
@@ -1655,7 +1655,7 @@ PROJECTS: list[dict[str, Any]] = [
             "M5 a monitor with a durable cursor and diff output",
             "M6 publication: 0.1.0 with cross checks against a production log",
         ],
-        "extras": {"crypto": [("cryptography", "50.0.2")]},
+        "extras": {"crypto": [("cryptography", "42.0")]},
         "cli": "ctspy check cert.pem --logs logs.json --verify-inclusion",
     },
 ]

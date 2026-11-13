@@ -10,40 +10,41 @@ from __future__ import annotations
 # sections 4 and 6; an arrow means "cannot deliver behaviour without".
 POSITION = {
     # Tier 1, wave 1: the chokepoint itself.
-    "rpkit": (1, 1, ("asn1core",)),
+    "rpkit": (1, 1, ("asn1core", "pkix", "signeddata", "sigwire")),
     # Tier 2, wave 2: the certificate cluster.
     "ctspy": (2, 2, ("asn1core",)),
     "pkix": (2, 2, ("asn1core",)),
     "revokekit": (2, 2, ("asn1core", "pkix")),
     # Tier 2, wave 2: the routing-security cluster, anchored on rpkit.
     "rtrkit": (2, 2, ("rpkit",)),
-    "routevalid": (2, 2, ("rpkit", "rtrkit")),
+    "routevalid": (2, 2, ("rpkit", "rtrkit", "pathattr")),
     # Tier 2, wave 4: naming and address allocation.
     "dnssd-srp": (2, 4, ("namespy",)),
     "leasespy": (2, 4, ()),
     # Tier 3, wave 3: the routing-operations story.
-    "asnkit": (3, 3, ("rpkit", "rtrkit")),
-    "bgpfeed": (3, 3, ("asnkit",)),
-    # Tier 3, wave 3: solid gaps with no dependency in front of them.
+    "asnkit": (3, 3, ("rpkit", "rtrkit", "pathattr")),
+    "bgpfeed": (3, 3, ("asnkit", "pathattr")),
+    # Tier 3: solid gaps. rpslkit, bmpkit and pathattr sit in wave 3 with the routing story; lgc, turnkit, ohttp,
+    # h3tunnel, sfields and syslogkit are in no wave of PORTFOLIO.md section 7 but "the rest", which is wave 5.
     "rpslkit": (3, 3, ()),
-    "bmpkit": (3, 3, ()),
+    "bmpkit": (3, 3, ("pathattr",)),
     "pathattr": (3, 3, ()),
-    "lgc": (3, 3, ()),
-    "turnkit": (3, 3, ()),
-    "ohttp": (3, 3, ()),
-    "h3tunnel": (3, 3, ()),
-    "sfields": (3, 3, ()),
-    "syslogkit": (3, 3, ()),
+    "lgc": (3, 5, ()),
+    "turnkit": (3, 5, ()),
+    "ohttp": (3, 5, ()),
+    "h3tunnel": (3, 5, ()),
+    "sfields": (3, 5, ()),
+    "syslogkit": (3, 5, ()),
     # Tier 3, wave 2: certificate-shaped, so gated on the substrate.
     "signeddata": (3, 2, ("asn1core",)),
     # Tier 4, wave 5: the rest, in tier order, one at a time.
     "ntspy": (4, 5, ()),
     "tacacs": (4, 5, ()),
     "pgpenv": (4, 5, ("asn1core",)),
-    "enrollkit": (4, 5, ("asn1core", "pkix")),
-    "shaken": (4, 5, ("asn1core",)),
-    "srtpkit": (4, 5, ("asn1core",)),
-    "cwmp": (4, 5, ()),
+    "enrollkit": (4, 5, ("asn1core", "pkix", "signeddata")),
+    "shaken": (4, 5, ("asn1core", "pkix")),
+    "srtpkit": (4, 5, ()),
+    "cwmp": (4, 5, ("devicespy",)),
     "devicespy": (4, 5, ()),
     # Tier 4, wave 5: created against the no-new-shells rule on 2026-11-07, which is why
     # it is hold-tier despite a real gap: pysmi 2.0.0 occupies the job and is current.
@@ -177,6 +178,32 @@ DEPENDS_WHY = {
     "as good as the edition it was parsed from, so fetching, "
     "digesting and pinning that corpus is itulib's job rather "
     "than a second copy of it per project",
+    # Edges decided by PORTFOLIO.md section 9 item 15 (2026-11-13).
+    ("rpkit", "pkix"): "RPKI resource certificates are X.509, and path building and "
+    "extension decoding are pkix's job, with the RFC 3779 inclusion checks done "
+    "during its path validation",
+    ("rpkit", "signeddata"): "every RPKI signed object is a CMS SignedData, and CMS "
+    "belongs to signeddata, so rpkit composes it rather than keeping a second reader",
+    ("rpkit", "sigwire"): "signature verification goes through sigwire[verify], the "
+    "strict seam over cryptography that replaced the retired sigprim",
+    ("routevalid", "pathattr"): "an origin is read from an AS_PATH, and decoding the "
+    "path attributes, AS4 and AS_TRANS included, is pathattr's job",
+    ("asnkit", "pathattr"): "MRT RIB and UPDATE records carry BGP path attributes, "
+    "which pathattr decodes",
+    ("bgpfeed", "pathattr"): "a feed's UPDATE messages carry path attributes, which "
+    "pathattr decodes rather than each consumer keeping its own",
+    ("bmpkit", "pathattr"): "a BMP Route Monitoring message wraps a BGP UPDATE whose "
+    "path attributes pathattr decodes",
+    (
+        "enrollkit",
+        "signeddata",
+    ): "enrollment flows exchange CMS structures, and CMS belongs to signeddata "
+    "rather than being written again here",
+    ("shaken", "pkix"): "a SHAKEN certificate is accepted only once it validates to a "
+    "trust anchor, which is pkix's path validation, and its extensions are "
+    "decoded there too",
+    ("cwmp", "devicespy"): "both parse XML written by a stranger, and the one hardened "
+    "XML reader (xmlsafe) lives in devicespy, which cwmp uses by sibling path",
 }
 
 

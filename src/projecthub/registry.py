@@ -39,10 +39,16 @@ def directories() -> dict[str, str]:
     return dict(parser.DIRECTORIES)
 
 
-# Projects the generator does not position: (kind, tier, wave, directory, what it is, source). Tier and wave
-# 0 mean untiered and unsequenced, which is not the same as Wave 0 (hygiene). The "what" is PORTFOLIO.md's
-# own wording where it has some.
-EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
+# Projects the generator does not position: (kind, tier, wave, directory, what it is, source), plus an
+# optional seventh member, the names it depends on (PORTFOLIO.md section 6, "an arrow means cannot deliver
+# behaviour without"), which `entries()` carries into `Entry.depends`, so `projecthub graph` and a generated
+# docs/plan.md both see it. Tier and wave 0 mean untiered and unsequenced, which is not the same as Wave 0
+# (hygiene). The "what" is PORTFOLIO.md's own wording where it has some.
+EXTRA: dict[
+    str,
+    tuple[str, int, int, str, str, str]
+    | tuple[str, int, int, str, str, str, tuple[str, ...]],
+] = {
     "asn1core": (
         "Library",
         1,
@@ -139,6 +145,69 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "registration data: an RFC 2167 RWhois client and server, plus experimental WHOIS and RDAP behind one lookup model",
         "PORTFOLIO.md s3 (implemented, not yet sequenced into a tier)",
     ),
+    # Support libraries, created 2026-11-13 under PORTFOLIO.md s9 item 14 and s2's self-sufficiency principle:
+    # untiered, unsequenced, outside the two-project rule. `sigprim` merged into `sigwire[verify]` (item 15).
+    "archivekit": (
+        "Library",
+        0,
+        0,
+        "archivekit",
+        "bounded, streaming, byte-faithful readers for tar, cpio, ar, zip and the compression formats under them",
+        "PORTFOLIO.md s4 support libraries; s9 item 14",
+    ),
+    "sigwire": (
+        "Library",
+        0,
+        0,
+        "sigwire",
+        "lightweight signature formats, with strict verification (`sigwire[verify]`) over `cryptography`",
+        "PORTFOLIO.md s4 support libraries; s9 item 15 (sigprim merged in)",
+        ("pgpenv",),
+    ),
+    "gitobj": (
+        "Library",
+        0,
+        0,
+        "gitobj",
+        "git loose and pack objects, tree ids, SWHIDs and smart HTTP, reading only",
+        "PORTFOLIO.md s4 support libraries; s9 items 14 and 15",
+        ("archivekit",),
+    ),
+    "pkgformats": (
+        "Library",
+        0,
+        0,
+        "pkgformats",
+        "package formats in strict layers: deb, rpm, pacman, apk, xbps, ipk, nix, Gentoo, with PKGBUILD reading",
+        "PORTFOLIO.md s4 support libraries; s9 item 15 (owner of the PKGBUILD reader)",
+        ("archivekit", "sigwire", "pgpenv"),
+    ),
+    "pkgtrust": (
+        "Tooling",
+        0,
+        0,
+        "pkgtrust",
+        "distribution supply-chain measurement: how distributions fetch, verify and patch upstream source",
+        "PORTFOLIO.md s3 and s4 measurement tooling",
+        ("archivekit", "sigwire", "gitobj", "pkgformats", "pgpenv", "kconfigpy"),
+    ),
+    "distbuild": (
+        "Tooling",
+        0,
+        0,
+        "distbuild",
+        "distribution build reproduction, registered untiered 2026-11-13",
+        "PORTFOLIO.md s9 item 15 (registration)",
+        ("pkgformats",),
+    ),
+    "primarysource": (
+        "Reference",
+        0,
+        0,
+        "primarysource",
+        "the shared core of the reference libraries: model, ref grammar, pager, result footer, home resolution",
+        "reference library core: PORTFOLIO.md s3 and s4, s9 item 13 (adoption by the other libraries is planned, not yet an import)",
+    ),
     # sdk-forge until 2026-11-12, when it was retired into this repository (PORTFOLIO.md s9 item 12).
     "projecthub": (
         "Tooling",
@@ -216,7 +285,10 @@ def entries() -> list[Entry]:
         )
         for name, (tier, wave, deps) in position.items()
     ]
-    out += [Entry(name, *spec) for name, spec in EXTRA.items()]
+    for name, spec in EXTRA.items():
+        out.append(
+            Entry(name, *spec[:6], depends=tuple(spec[6]) if len(spec) > 6 else ())
+        )
     return sorted(out, key=lambda e: (e.tier or 9, e.wave or 9, e.name))
 
 

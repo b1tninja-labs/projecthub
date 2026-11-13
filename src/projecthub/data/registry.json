@@ -39,7 +39,10 @@
       1,
       1,
       [
-        "asn1core"
+        "asn1core",
+        "pkix",
+        "signeddata",
+        "sigwire"
       ]
     ],
     "ctspy": [
@@ -76,7 +79,8 @@
       2,
       [
         "rpkit",
-        "rtrkit"
+        "rtrkit",
+        "pathattr"
       ]
     ],
     "dnssd-srp": [
@@ -96,14 +100,16 @@
       3,
       [
         "rpkit",
-        "rtrkit"
+        "rtrkit",
+        "pathattr"
       ]
     ],
     "bgpfeed": [
       3,
       3,
       [
-        "asnkit"
+        "asnkit",
+        "pathattr"
       ]
     ],
     "rpslkit": [
@@ -114,7 +120,9 @@
     "bmpkit": [
       3,
       3,
-      []
+      [
+        "pathattr"
+      ]
     ],
     "pathattr": [
       3,
@@ -123,32 +131,32 @@
     ],
     "lgc": [
       3,
-      3,
+      5,
       []
     ],
     "turnkit": [
       3,
-      3,
+      5,
       []
     ],
     "ohttp": [
       3,
-      3,
+      5,
       []
     ],
     "h3tunnel": [
       3,
-      3,
+      5,
       []
     ],
     "sfields": [
       3,
-      3,
+      5,
       []
     ],
     "syslogkit": [
       3,
-      3,
+      5,
       []
     ],
     "signeddata": [
@@ -180,27 +188,29 @@
       5,
       [
         "asn1core",
-        "pkix"
+        "pkix",
+        "signeddata"
       ]
     ],
     "shaken": [
       4,
       5,
       [
-        "asn1core"
+        "asn1core",
+        "pkix"
       ]
     ],
     "srtpkit": [
       4,
       5,
-      [
-        "asn1core"
-      ]
+      []
     ],
     "cwmp": [
       4,
       5,
-      []
+      [
+        "devicespy"
+      ]
     ],
     "devicespy": [
       4,

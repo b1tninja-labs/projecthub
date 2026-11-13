@@ -123,3 +123,31 @@ def test_an_absent_project_is_reported_absent_rather_than_crashing():
 def test_the_generated_shells_are_all_registered():
     """generate.PROJECT_ORDER is what a run writes; anything there must be in the registry it is gated from."""
     assert set(generate.PROJECT_ORDER) <= set(PROJECTS)
+
+
+def test_portfolio_item_15_edges_are_in_the_registry():
+    """PORTFOLIO.md section 9 item 15: the edges the generated plans and `graph` must show."""
+    deps = {e.name: set(e.depends) for e in p.entries()}
+    for consumer in ("asnkit", "bmpkit", "bgpfeed", "routevalid"):
+        assert "pathattr" in deps[consumer], consumer
+    assert {"pkix", "signeddata", "sigwire"} <= deps["rpkit"]
+    assert "devicespy" in deps["cwmp"]
+    assert "signeddata" in deps["enrollkit"]
+    assert "pkix" in deps["shaken"]
+    assert "asn1core" not in deps["srtpkit"]
+
+
+def test_extra_entries_carry_their_dependencies_into_the_graph():
+    by_name = {e.name: e for e in p.entries()}
+    assert by_name["gitobj"].depends == ("archivekit",)
+    assert by_name["archivekit"].depends == ()
+    for name in (
+        "pkgtrust",
+        "primarysource",
+        "archivekit",
+        "sigwire",
+        "gitobj",
+        "pkgformats",
+        "distbuild",
+    ):
+        assert name in by_name, name

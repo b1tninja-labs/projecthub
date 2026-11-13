@@ -473,7 +473,7 @@ PROJECTS: list[dict[str, Any]] = [
             "M5 push subscriptions, with erratum 8560 RECONFIRM behaviour",
             "M6 discovery proxy front end, then publication: 0.1.0",
         ],
-        "extras": {"crypto": [("cryptography", "50.0.2")]},
+        "extras": {"crypto": [("cryptography", "42.0")]},
         "cli": "dnssd-srp register --name printer --type _printer._tcp --port 515",
     },
     {
@@ -970,7 +970,7 @@ PROJECTS: list[dict[str, Any]] = [
         "name": "cwmp",
         "pkg": "cwmp",
         "title": "cwmp -- TR-069 CWMP for ACS and CPE",
-        "desc": "CWMP remote management: SOAP 1.2 RPC codec, session machinery, Digest "
+        "desc": "CWMP remote management: SOAP 1.1 RPC codec, session machinery, Digest "
         "authentication, parameter path trees and file transfer, ACS and CPE sides",
         "kw": [
             "tr-069",
@@ -995,10 +995,10 @@ PROJECTS: list[dict[str, Any]] = [
         ),
         "docs": [
             {
-                "label": "TR-069 (CWMP)",
-                "status": "Broadband Forum",
-                "date": "-",
-                "why": "the protocol: Inform, Get and SetParameterValues, TransferFile",
+                "label": "TR-069 Issue 1 Amendment 6 Corrigendum 1 (CWMP 1.4)",
+                "status": "Broadband Forum, In Force",
+                "date": "2020-06",
+                "why": "the protocol: Inform, Get and SetParameterValues, TransferFile; the RPC methods are in Annex A",
             },
             {
                 "label": "TR-181 (Device:2)",
@@ -1013,7 +1013,7 @@ PROJECTS: list[dict[str, Any]] = [
                 "why": "the model most deployed CPE still exposes",
             },
             {
-                "label": "TR-069 Annex 2 (SOAP)",
+                "label": "TR-069 section 3.5 (Use of SOAP)",
                 "status": "Broadband Forum",
                 "date": "-",
                 "why": "the envelope and encoding rules the RPC layer obeys",
@@ -1063,7 +1063,7 @@ PROJECTS: list[dict[str, Any]] = [
             },
         ],
         "gaps": [
-            "SOAP 1.2 RPC codec that refuses hostile XML: no DTDs, no external entities, bounded depth",
+            "SOAP 1.1 RPC codec that refuses hostile XML: no DTDs, no external entities, bounded depth",
             "CWMP session engine: Inform, RPC method dispatch, fault codes, keep-alive and nonce-based retry",
             "HTTP Digest authentication on both sides, since most CPE ship nothing else",
             "parameter path tree with wildcards, instance addition and deletion, typed constraints",
@@ -1075,7 +1075,10 @@ PROJECTS: list[dict[str, Any]] = [
             "USP transport in the first release, only the seam that will allow it",
         ],
         "mods": [
-            ("envelope", "SOAP 1.2 envelope codec with XML hardening (TR-069 Annex 2)"),
+            (
+                "envelope",
+                "SOAP 1.1 envelope codec with XML hardening (TR-069 section 3.5)",
+            ),
             ("methods", "one class per RPC method, request and response (TR-069)"),
             (
                 "session",
@@ -1103,7 +1106,7 @@ PROJECTS: list[dict[str, Any]] = [
                 "encode_envelope",
                 "rpc: Rpc, session: SessionContext",
                 "bytes",
-                "TR-069 Annex 2",
+                "TR-069 section 3.5",
                 "M1",
             ),
             (
@@ -1112,7 +1115,7 @@ PROJECTS: list[dict[str, Any]] = [
                 "decode_envelope",
                 "raw: bytes",
                 "Rpc",
-                "TR-069 Annex 2",
+                "TR-069 section 3.5",
                 "M1",
             ),
             (
@@ -1227,21 +1230,15 @@ PROJECTS: list[dict[str, Any]] = [
         "docs": [
             {
                 "label": "UDA 2.0 (UPnP Device Architecture)",
-                "status": "UPnP Forum",
-                "date": "-",
-                "why": "device and service description, control, eventing, boot sequence",
+                "status": "Open Connectivity Foundation (document revision 2020-04-17; the UPnP Forum's assets passed to OCF in 2016)",
+                "date": "2020-04-17",
+                "why": "device and service description, control, eventing, boot sequence, and SSDP",
             },
             {
-                "label": "GENA 1.0",
-                "status": "OASIS",
-                "date": "-",
-                "why": "subscribe, renew, notify, unsubscribe",
-            },
-            {
-                "label": "SDDL 1.0",
-                "status": "UPnP Forum",
-                "date": "-",
-                "why": "device and service description discovery layout",
+                "label": "GENA (draft-cohen-gena-p-base, draft-cohen-gena-client-00)",
+                "status": "two expired Microsoft Internet-Drafts, never an RFC and not OASIS",
+                "date": "1998, 1999",
+                "why": "history only: UPnP eventing (subscribe, renew, notify, unsubscribe) is defined inside UDA 2.0",
             },
             {
                 "n": "9110",
@@ -1251,7 +1248,7 @@ PROJECTS: list[dict[str, Any]] = [
             },
         ],
         "errata": [
-            "UDA and GENA are outside the RFC series: pin the exact specification revision in every docstring.",
+            "UDA is outside the RFC series: pin the exact document revision in every docstring. SDDL 1.0 was not found on the Open Connectivity Foundation's UPnP page and is not cited; restore it only with a named source.",
             "SSDP itself has a maintained Python owner already (ssdp 1.3.1), so the design decision is whether to depend on it or speak multicast HTTP directly. Record the reasoning in docs/strategy.md before writing code.",
         ],
         "prior": [
@@ -1295,7 +1292,7 @@ PROJECTS: list[dict[str, Any]] = [
         "mods": [
             (
                 "advertise",
-                "SSDP alive, byebye and search responses (UDA 2.0, SDDL 1.0)",
+                "SSDP alive, byebye and search responses (UDA 2.0)",
             ),
             ("description", "device and service description documents (UDA 2.0)"),
             (
@@ -1305,7 +1302,7 @@ PROJECTS: list[dict[str, Any]] = [
             ("control", "SOAP action dispatch with argument coercion (UDA 2.0)"),
             (
                 "events",
-                "GENA subscriptions and evented property change notifications (GENA 1.0)",
+                "GENA-style subscriptions and evented property change notifications (UDA 2.0 eventing)",
             ),
             ("xmlsafe", "the hardened parser every other module must use"),
             ("httpd", "the small asyncio HTTP surface the device serves (RFC 9110)"),
@@ -1362,7 +1359,7 @@ PROJECTS: list[dict[str, Any]] = [
                 "notify",
                 "subscription: Subscription, props: dict",
                 "None",
-                "GENA 1.0",
+                "UDA 2.0 eventing",
                 "M4",
             ),
             (
@@ -1371,7 +1368,7 @@ PROJECTS: list[dict[str, Any]] = [
                 "renew",
                 "subscription: Subscription, requested: int",
                 "Subscription",
-                "GENA 1.0",
+                "UDA 2.0 eventing",
                 "M4",
             ),
             (
@@ -1783,7 +1780,7 @@ PROJECTS: list[dict[str, Any]] = [
             "M5 server side plus a loopback interoperability test",
             "M6 publication: 0.1.0",
         ],
-        "extras": {"crypto": [("cryptography", "50.0.2")]},
+        "extras": {"crypto": [("cryptography", "42.0")]},
         "cli": "ntspy query time.google.com --nts -- show offset, delay and how it was authenticated",
     },
     {

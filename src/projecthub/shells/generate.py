@@ -254,7 +254,8 @@ def subs(text: str, mapping: dict[str, object]) -> str:
 
 
 def reqs(pairs: list[tuple[str, str]]) -> str:
-    return ", ".join('"' + n + GT + v + '"' for n, v in pairs)
+    # A floor, not an exclusive bound: ">50.0.2" excluded 50.0.2 itself and every older release that has the API.
+    return ", ".join('"' + n + GE + v + '"' for n, v in pairs)
 
 
 def toml_list(items: list[str]) -> str:
