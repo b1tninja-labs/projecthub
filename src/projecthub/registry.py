@@ -13,7 +13,9 @@ Sources, in order of authority:
 - each checkout's git remote for its GitHub repository, so a renamed repository (rfclibrary -> rfclib) is
   read, not remembered.
 
-The few projects outside POSITION are listed in EXTRA with the PORTFOLIO.md section they come from.
+The few projects outside POSITION are listed in EXTRA with the PORTFOLIO.md section they come from. Every one
+of them is also a row of that document - sections 3 and 4 - which `mentioned_in` checks, because an entry
+whose source nobody wrote down is a project the plan does not know about.
 """
 
 from __future__ import annotations
@@ -26,6 +28,16 @@ import subprocess
 from dataclasses import dataclass, field
 
 KINDS = ("Library", "Service", "Plan", "Reference", "Tooling")
+
+
+def directories() -> dict[str, str]:
+    """Project name -> checkout folder, for the projects whose folder carries another name. The map lives in
+    the roadmap grammar (`db.parser.DIRECTORIES`), which evidence, mutation and project_dir already read, so
+    there is one copy of it."""
+    from projecthub.db import parser
+
+    return dict(parser.DIRECTORIES)
+
 
 # Projects the generator does not position: (kind, tier, wave, directory, what it is, source). Tier and wave
 # 0 mean untiered and unsequenced, which is not the same as Wave 0 (hygiene). The "what" is PORTFOLIO.md's
@@ -94,6 +106,22 @@ EXTRA: dict[str, tuple[str, int, int, str, str, str]] = {
         "itulibrary",
         "the ITU-T ASN.1 and X.500 text the RFC series cannot reach, served the same way",
         "reference library: asn1core's [verify against X.690] markers",
+    ),
+    "nistlib": (
+        "Reference",
+        0,
+        0,
+        "nistlibrary",
+        "NIST publications as citable context for agents, served over MCP",
+        "reference library: default to the current final revision, every revision reachable",
+    ),
+    "usblib": (
+        "Reference",
+        0,
+        0,
+        "usblibrary",
+        "USB-IF specifications as citable context for agents, served over MCP",
+        "reference library: section text from the chosen PDF, with citations",
     ),
     "zimlore": (
         "Reference",

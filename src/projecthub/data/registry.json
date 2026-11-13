@@ -30,7 +30,9 @@
     "bgpfeed",
     "routevalid",
     "lgc",
-    "miblang"
+    "miblang",
+    "nistlib",
+    "usblib"
   ],
   "position": {
     "rpkit": [
