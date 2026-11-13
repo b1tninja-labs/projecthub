@@ -61,9 +61,10 @@ def test_an_expired_lease_cannot_heartbeat_and_frees_the_row(store):
         s.heartbeat(lease.lease_id)
     assert caught.value.code == "LEASE_EXPIRED"
     assert s.acquire("pkix", "a.b").lease_id != lease.lease_id, "the row is free again"
-    assert [e["kind"] for e in s.events("pkix:a.b")][:3] == [
+    assert [e["kind"] for e in s.events("pkix:a.b")][:4] == [
         "acquire",
         "expire",
+        "heartbeat",
         "acquire",
     ]
 
@@ -117,7 +118,11 @@ def _server(store, ready):
     pytest.importorskip("mcp")
     import anyio
 
-    app = L.build(store, ready)
+    import fakeboard as fb
+
+    clock = fb.Clock(store.now())
+    board = fb.FakeBoard(fb.item("[pkix] a.b: x", Status="Ready"))
+    app = L.build(store, ready, claims=fb.claimant(store, board, clock))
     listed = anyio.run(app.list_tools)
     return app, {t.name: t for t in getattr(listed, "tools", listed)}
 

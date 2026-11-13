@@ -52,6 +52,28 @@ ROOT = pathlib.Path(paths.env("ROOT", "D:/code"))
 # redirect, and some stay personal on purpose; the Project's own owner is config.PROJECT_OWNER.
 ORG = "b1tninja"
 OPENISH = ("open",)
+NON_GOAL = "[no]"
+
+
+def is_open(row: dict[str, str]) -> bool:
+    """An unmet obligation: an issue that stays open, and not a declared non-goal. A `[no]` row keeps its
+    issue open (type:non-goal), but it is a decision, never work, so no reader may offer it."""
+    return (
+        row["status"] != NON_GOAL
+        and STATUSES.get(row["status"], ("", "open"))[1] == "open"
+    )
+
+
+def nongoal_rows(project: str) -> set[str]:
+    """Row names the project's matrix declares `[no]`; empty when it has no matrix."""
+    path = roadmap_path(project)
+    if not path.is_file():
+        return set()
+    return {
+        row["name"]
+        for row in rows_of(path.read_text(encoding="utf-8"))
+        if row["status"] == NON_GOAL
+    }
 
 
 def _gh_json(argv: list[str]) -> object:
@@ -126,11 +148,7 @@ def next_actions(project: str, limit: int = 10) -> list[dict[str, str]]:
     path = roadmap_path(project)
     if not path.is_file():
         return [{"error": f"{project} has no ROADMAP.md"}]
-    rows = [
-        row
-        for row in rows_of(path.read_text(encoding="utf-8"))
-        if STATUSES.get(row["status"], ("", "open"))[1] == "open"
-    ]
+    rows = [row for row in rows_of(path.read_text(encoding="utf-8")) if is_open(row)]
     out = []
     for row in rows[:limit]:
         node, state = roadmap.named_test(ROOT, project, row["where"], row["evidence"])
@@ -192,11 +210,7 @@ def ready_rows(
         path = roadmap.matrix_path(base, entry.name)
         if path is None:
             continue
-        open_rows = [
-            r
-            for r in rows_of(path.read_text(encoding="utf-8"))
-            if STATUSES.get(r["status"], ("", "open"))[1] == "open"
-        ]
+        open_rows = [r for r in rows_of(path.read_text(encoding="utf-8")) if is_open(r)]
         if entry.name not in active:
             skip("project not Active", len(open_rows))
             continue
@@ -213,7 +227,8 @@ def ready_rows(
             skip(f"blocked by {', '.join(blockers)} (not yet code)", len(open_rows))
             continue
         order = list(roadmap.ladder_for(base, entry.name))
-        mine = [r for r in open_rows if f"{entry.name}:{r['name']}" not in leased]
+        held = {_row_key(*k.split(":", 1)) for k in leased if ":" in k}
+        mine = [r for r in open_rows if _row_key(entry.name, r["name"]) not in held]
         skip("leased: in progress", len(open_rows) - len(mine))
         for row in mine:
             node, test_state = roadmap.named_test(
@@ -270,12 +285,14 @@ def ready_rows(
 def active_projects(
     owner: str = config.PROJECT_OWNER, number: int = config.PROJECT_NUMBER
 ) -> set[str]:
-    """Projects the owner marked Active on the board. Read, never inferred: Active is the owner's call."""
+    """Projects the owner marked Active on the board. Read, never inferred: Active is the owner's call.
+    Read through the board cache, so a claim right after a pickup does not read the whole Project again."""
+    from projecthub.github.boardcache import BoardCache
     from projecthub.github.client import Projects
 
     return {
         item.title.split(":", 1)[0].strip()
-        for item in Projects().items(owner, number)
+        for item in BoardCache().items(Projects(), owner, number)
         if item.values.get("Level") == "Project"
         and item.values.get("Active") == "Active"
     }
@@ -450,6 +467,34 @@ def _live_leases() -> set[str]:
     from projecthub.mcp import work as leases
 
     return leases.Store().live_keys()
+
+
+def _held_on_project() -> set[str]:
+    """Row keys under an unexpired claim on Project 1, read through the board cache. The Project decides;
+    only when it cannot be read does this fall back to the local mirror, so next still answers offline."""
+    import time
+
+    from projecthub.github import claims
+    from projecthub.github.boardcache import BoardCache
+    from projecthub.github.client import Projects
+    from projecthub.mcp import loop
+
+    try:
+        cards = BoardCache().items(
+            Projects(), config.PROJECT_OWNER, config.PROJECT_NUMBER
+        )
+    except Exception:  # noqa: BLE001 - offline: the mirror is the best this machine knows
+        return _live_leases()
+    return claims.held_keys(
+        cards,
+        time.time(),
+        lambda c: loop.claim_key(loop.project_of(c), loop.card_row(c)),
+    )
+
+
+def _row_key(project: str, row: str) -> str:
+    """`project:row` without backticks or a trailing (), the way a claim key is spelled."""
+    return f"{project}:{row.replace('`', '').strip().removesuffix('()')}"
 
 
 def _live_lease_rows() -> dict[str, dict[str, str]]:
@@ -803,7 +848,7 @@ def build():
             raise ToolError(
                 "no project is marked Active on the board; set Active on at most two projects, or pass active=[...]"
             )
-        return ready_rows(chosen, project, limit, leased=_live_leases())  # type: ignore[return-value]
+        return ready_rows(chosen, project, limit, leased=_held_on_project())  # type: ignore[return-value]
 
     @app.tool(
         name="packet",

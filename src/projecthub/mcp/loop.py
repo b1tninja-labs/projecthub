@@ -12,6 +12,11 @@ means, which is the drift projecthub exists to prevent. The GitHub MCP server is
 question: its `projects` toolset returns titles unless field ids are passed, and it is skipped entirely under
 `--read-only`, which is how the `github` server is configured on this machine.
 
+Where the board comes from. Project 1 is the authority on who works what: pickup and next read its items once
+per run through the board cache (github/boardcache.py, about 60 s, keyed by owner and number), and an item
+someone else holds under an unexpired Claim expires is passed over. The local lease store is not consulted
+for that; it only mirrors claims this machine won. The claim itself is github/claims.py.
+
 Why nothing here writes. Decision D23: a card is a claim, and a row reaches `[ok]` only in the same commit as a
 named test that would fail if the behaviour regressed. So this emits a step and a command; the flip, the gates
 and `projecthub sync` stay in the CLIs that check evidence. Two fields make the boundary concrete: `promote`
@@ -33,6 +38,7 @@ import json
 import os
 import pathlib
 import re
+import time
 from datetime import UTC, datetime
 from collections.abc import Callable, Collection, Sequence
 from typing import Any, cast
@@ -41,6 +47,8 @@ from projecthub import deps, paths
 from projecthub.mcp import read as planner
 from projecthub.github import projects_mcp as views
 from projecthub.db import parser as roadmap
+from projecthub.github import claims as board_claims
+from projecthub.github.boardcache import BoardCache
 from projecthub.github.client import Item, Projects
 
 ROOT = pathlib.Path(paths.env("ROOT", "D:/code"))
@@ -56,6 +64,7 @@ DONEISH = ("Done", "In review")
 RANK = {CONTINUABLE: 0, STARTABLE: 1, BACKLOG: 2}
 # deps.py reports a dependency's state; it refuses to say a dependent is unblocked, and neither does this.
 HARD_BLOCK = ("absent", "plan only")
+NON_GOAL = "[no]"
 SOFT_BLOCK = ("shell",)
 
 
@@ -251,8 +260,14 @@ def pick(
     matrix_for: Callable[[str], pathlib.Path] | None = None,
     runbook: Callable[[str], str] | None = None,
     leased: Collection[str] = (),
+    nongoal: Callable[[str], Collection[str]] | None = None,
 ) -> dict[str, Any]:
     """The one step to take, or a stop reason. Pure over `cards`, so a test can invent a board.
+
+    `leased` holds the claim keys someone holds on the Project right now; those rows are passed over.
+    `nongoal(project)` names the rows the matrix declares `[no]`: a non-goal is a decision, never work, so
+    such a row is never ready whatever its card says. By default it is read from the injected `file_rows`
+    (rows whose status is `[no]`) or, with no injection, from the matrix on disk.
 
     Ordering is the whole policy: continue a row already In progress, then start a Ready row inside a project
     somebody marked Active, and only then reach outside the active two - and even then it is proposed, never
@@ -262,6 +277,19 @@ def pick(
     """
     rows_of_file = file_rows or (lambda name: planner.next_actions(name, limit=500))
     matrix_path = matrix_for or planner.roadmap_path
+    if nongoal is None:
+        if file_rows is None:
+            nongoal = planner.nongoal_rows
+        else:
+
+            def nongoal(name: str) -> set[str]:
+                return {
+                    plain(r["row"])
+                    for r in rows_of_file(name)
+                    if r.get("status") == NON_GOAL
+                }
+
+    declined: dict[str, set[str]] = {}
 
     active = active_projects(cards)
     candidates = [
@@ -284,6 +312,17 @@ def pick(
     skipped: list[dict[str, str]] = []
     for card in candidates:
         project = project_of(card)
+        if project not in declined:
+            declined[project] = {plain(r) for r in nongoal(project)}
+        if plain(card_row(card)) in declined[project]:
+            skipped.append(
+                {
+                    "project": project,
+                    "row": card_row(card),
+                    "why": "the matrix declares this row a non-goal ([no]); it is never ready",
+                }
+            )
+            continue
         if claim_key(project, card_row(card)) in leased:
             skipped.append(
                 {
@@ -445,6 +484,10 @@ LEASE_COMMAND = "projecthub leases"
 NO_WORK_EXIT = 3
 # The caller already holds as many live leases as it may: finish, park or block that one first.
 BUSY_EXIT = 4
+# The Project could not be reached, or the rate budget is low: nothing was claimed, and retrying now will not help.
+OFFLINE_EXIT = 5
+# Refusals that concern one row only: pass it over and try the next.
+PASS_OVER = ("LEASE_HELD", "NOT_CLAIMABLE", "NO_ITEM", "AMBIGUOUS", "CLAIM_UNCERTAIN")
 PICK_ATTEMPTS = 25
 
 
@@ -540,15 +583,24 @@ def run_pickup(
     who: str = "agent",
     file_rows: Callable[[str], list[dict[str, str]]] | None = None,
     matrix_for: Callable[[str], pathlib.Path] | None = None,
+    nongoal: Callable[[str], Collection[str]] | None = None,
+    now: float | None = None,
 ) -> tuple[int, str]:
     """Pick one row, claim it and return the assignment, or a distinct NO WORK state with its reason.
+
+    `cards` are Project 1's items and `store` is the claimant (github/claims.ProjectClaims): its `acquire`
+    decides on the Project. Exclusion comes from the cards alone: an item under someone's unexpired claim is
+    passed over, and a Blocked item is not startable at all. The local lease store is not consulted.
 
     The runbook check is left out on purpose: it guards a Cline slash command, and this output runs in any client.
     A row that cannot produce a packet is passed over, so one stale card cannot stop every arrival.
     """
     from projecthub.mcp import work as lease_store
 
-    excluded = set(store.live_keys()) | set(store.blocked_keys())
+    at = time.time() if now is None else now
+    excluded = board_claims.held_keys(
+        cards, at, lambda c: claim_key(project_of(c), card_row(c))
+    )
     for _ in range(PICK_ATTEMPTS):
         step = pick(
             root,
@@ -557,6 +609,7 @@ def run_pickup(
             file_rows=file_rows,
             matrix_for=matrix_for,
             leased=excluded,
+            nongoal=nongoal,
         )
         if "command" not in step:
             return NO_WORK_EXIT, _no_work(str(step["stop"]), step.get("skipped") or [])
@@ -580,24 +633,36 @@ def run_pickup(
                     "Finish that row, or end it with `projecthub leases release`, `park` or `block`, "
                     "then run pickup again."
                 )
-            if error.code != "LEASE_HELD":
-                raise
-            excluded.add(key)
-            continue
+            if error.code in PASS_OVER:
+                excluded.add(key)
+                continue
+            return OFFLINE_EXIT, (
+                f"CANNOT CLAIM: {error}\n"
+                "Nothing was claimed. Do not start the row without a claim; run pickup again later.\n"
+            )
         return 0, assignment(step, packet, lease)
     return NO_WORK_EXIT, _no_work(
         f"no row could be claimed in {PICK_ATTEMPTS} attempts"
     )
 
 
-def pickup_main(args: argparse.Namespace, cards: Sequence[Item]) -> int:
+def pickup_main(
+    args: argparse.Namespace,
+    cards: Sequence[Item],
+    client: Any = None,
+    cache: BoardCache | None = None,
+) -> int:
+    from projecthub.github.claims import ProjectClaims
     from projecthub.mcp import work as lease_store
 
     store = lease_store.Store()
+    claimant = ProjectClaims(
+        store, client, owner=args.owner, number=args.board, cache=cache
+    )
     code, text = run_pickup(
         ROOT,
         cards,
-        store=store,
+        store=claimant,
         make_packet=lambda key: planner.packet(key, leases=None),
         prefer=args.project,
         who=args.who,
@@ -634,14 +699,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    client = Projects()
+    cache = BoardCache()
     try:
-        cards = Projects().items(args.owner, args.board)
+        cards = cache.items(client, args.owner, args.board)
     except Exception as error:  # noqa: BLE001 - ghprojects raises typed errors that already name the fix
         print(json.dumps({"error": str(error)}) if args.json else f"error: {error}")
-        return 1
+        return OFFLINE_EXIT if args.action == "pickup" else 1
 
     if args.action == "pickup":
-        return pickup_main(args, cards)
+        return pickup_main(args, cards, client, cache)
 
     step = pick(
         ROOT,

@@ -20,6 +20,8 @@ def _python_stands_in_for_gh(monkeypatch):
     """`gh_runner` resolves gh on PATH; here this interpreter is gh, and each test starts undetected."""
     monkeypatch.setattr(g.shutil, "which", lambda name: sys.executable)
     monkeypatch.setattr(g, "_PLAIN_ARGS", None)
+    # conftest sets PROJECTHUB_OFFLINE so no test reaches the real gh; here gh is this interpreter.
+    monkeypatch.delenv("PROJECTHUB_OFFLINE", raising=False)
 
 
 def test_a_decorated_gh_stdout_still_reads_as_json():

@@ -17,6 +17,13 @@ Rules, each one an owner decision:
   marked private is never published.
 - **Nothing is dropped.** A missing item, a transient error or a refused value is retried later with
   backoff; only a write that went through (or a proposal that must stay private) is marked done.
+- **A lost claim is left alone.** A payload written under a claim carries that claim's token (`claim`). When
+  the item's Agent is another claim, every field of the payload is dropped and a conflict is recorded: the
+  Project decided the claim, and a heartbeat or release from the loser must not undo the winner's.
+- **Rate budget.** Before each request the process-wide budget (ratebudget.py) must be above its write floor;
+  under it the run stops with "rate budget low until <time>", and nothing it did not reach is touched.
+- **Rebuild signal.** A run that wrote at least one change sends one debounced `repository_dispatch`
+  (dispatch.py) to the portfolio repository, which rebuilds the public site from Project 1.
 - **Paced.** Every write is counted in `outbox_writes`, persisted, so a second run inside the same hour sees
   the first one's writes. The defaults stay under GitHub's secondary limits (80 content-creating requests a
   minute, 500 an hour), with a daily cap on top. A spent hour or day ends the run; entries not reached stay
@@ -36,6 +43,8 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, cast
 
 from projecthub import config
+from projecthub.github import dispatch as rebuild
+from projecthub.github.ratebudget import BUDGET, RateBudget
 from projecthub.github.client import (
     FIELD_BATCH,
     TRANSIENT,
@@ -51,7 +60,8 @@ from projecthub.github.client import (
 from projecthub.mcp.loop import CARD, plain
 
 # The fields the outbox may write. Anything else in a payload (a note above all) never reaches GitHub.
-BOARD_FIELDS = ("Status", "Claimed", "Agent", "Last activity")
+CLAIM_EXPIRES = "Claim expires"
+BOARD_FIELDS = ("Status", "Claimed", "Agent", "Last activity", CLAIM_EXPIRES)
 NEVER_WRITTEN = "Done"
 TRIAGE = "Triage"
 
@@ -240,6 +250,7 @@ class Report:
     planned: list[str] = field(default_factory=list)
     writes: int = 0
     stopped: str = ""
+    dispatch: str = ""
 
     def lines(self) -> list[str]:
         out = [*self.planned]
@@ -252,6 +263,8 @@ class Report:
         )
         if self.stopped:
             out.append(f"stopped: {self.stopped}")
+        if self.dispatch:
+            out.append(f"rebuild signal: {self.dispatch}")
         return out
 
 
@@ -339,7 +352,9 @@ class Drain:
         number: int,
         repo: str,
         dry_run: bool,
+        rate: RateBudget | None = None,
     ) -> None:
+        self.rate = rate or BUDGET
         self.store = store
         self.client = client
         self.state = state
@@ -372,6 +387,7 @@ class Drain:
 
     def spend(self, n: int) -> None:
         if not self.dry_run:
+            self.rate.require_write("drain")
             self.budget.take(n)
         self.report.writes += n
 
@@ -381,6 +397,12 @@ class Drain:
         entries = [e for e in self.store.pending(limit) if e.get("sink") == "board"]
         if not entries:
             return self.report
+        if not self.dry_run:
+            try:
+                self.rate.require_write("drain")
+            except RateLimited as error:
+                self.report.stopped = str(error)
+                return self.report
         self.project = self.client.project(self.owner, self.number)
         self.items = self.client.items(self.owner, self.number)
         self.live = {i.id: dict(i.values) for i in self.items}
@@ -397,6 +419,29 @@ class Drain:
             self.report.stopped = str(error)
         return self.report
 
+    def signal(self, clock: Callable[[], float]) -> None:
+        """One debounced repository_dispatch when this run changed the Project, or one is owed."""
+        if self.dry_run:
+            return
+        owed = rebuild._state(self.state.db, rebuild.EVENT_TYPE)[1]
+        if not self.report.writes and not owed:
+            return
+        try:
+            self.rate.require_write("dispatch")
+        except RateLimited as error:
+            self.report.dispatch = f"not sent: {error}"
+            return
+        sent = rebuild.signal_rebuild(
+            cast(rebuild.Dispatcher, self.client),
+            self.state.db,
+            changed=self.report.writes,
+            repo=self.repo,
+            clock=clock,
+        )
+        if sent.sent:
+            self.state.wrote(clock(), 1)
+        self.report.dispatch = sent.why
+
     def fields_of(
         self, entry: dict[str, Any], payload: dict[str, Any]
     ) -> dict[str, object]:
@@ -404,6 +449,11 @@ class Drain:
         for name, value in (payload.get("fields") or {}).items():
             if name not in BOARD_FIELDS:
                 self.report.skipped.append(f"#{entry['id']} {name}: not mirrored")
+            elif self.project is not None and name not in self.project.fields:
+                # Claim expires before a person has created it: the rest of the write still goes.
+                self.report.skipped.append(
+                    f"#{entry['id']} {name}: the Project has no such field yet"
+                )
             elif name == "Status" and value == NEVER_WRITTEN:
                 self.report.skipped.append(
                     f"#{entry['id']} Status Done: only evidence sets Done"
@@ -471,6 +521,25 @@ class Drain:
         item = found[0]
         if item.truncated and "Status" not in item.values:
             self.retry(entry, f"{item.title}: field values truncated, Status unknown")
+            return
+        token = payload.get("claim")
+        agent = str(self.live.get(item.id, {}).get("Agent") or "")
+        if token and agent and agent != token:
+            if not self.dry_run:
+                self.state.conflict(
+                    int(entry["id"]),
+                    item.id,
+                    "Agent",
+                    str(token),
+                    agent,
+                    None,
+                    self.budget.clock(),
+                )
+            self.report.conflicts.append(
+                f"#{entry['id']} {item.title}: claimed by {agent!r}, not {token!r}; the claim was lost, "
+                "so none of its fields were written"
+            )
+            self.done(entry)
             return
         try:
             changes = self.changes_for(entry, item, self.fields_of(entry, payload))
@@ -624,15 +693,17 @@ def drain(
     clock: Callable[[], float] = time.time,
     sleep: Callable[[float], None] = time.sleep,
     dry_run: bool = False,
+    rate: RateBudget | None = None,
 ) -> Report:
-    """Send up to `limit` due board entries. The state tables live beside the store's own when it has a path."""
+    """Send up to `limit` due board entries, then the debounced rebuild signal when anything was written.
+    The state tables live beside the store's own when it has a path."""
     if per_minute > 80 or per_hour > 500:
         raise ValueError("per_minute and per_hour must stay within GitHub's 80 and 500")
     if state is None:
         path = getattr(store, "path", None)
         state = DrainState(path if path is not None else ":memory:")
     budget = Budget(state, pace_s, per_minute, per_hour, per_day, clock, sleep)
-    return Drain(
+    run = Drain(
         store,
         client,
         state,
@@ -641,7 +712,11 @@ def drain(
         number=number,
         repo=repo,
         dry_run=dry_run,
-    ).run(limit)
+        rate=rate,
+    )
+    report = run.run(limit)
+    run.signal(clock)
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:

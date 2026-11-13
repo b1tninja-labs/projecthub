@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "projecthub"
 dynamic = ["version"]
-description = "A local planning database for coding agents: typed entries, checked citations, evidence-gated done, mirrored to GitHub Projects"
+description = "Planning for coding agents on GitHub Projects: claims, status and evidence-gated done, with a local write queue and read cache"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"

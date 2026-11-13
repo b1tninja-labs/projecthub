@@ -263,8 +263,8 @@ def test_plan_lists_ready_blocked_wip_and_oldest_with_reasons(
         registry, "state", lambda _, e: registry.State("Shell", 0, 0, "", "")
     )
     out = q.plan(workspace, {"alpha"})
-    # a.load is leased; ready_rows counts a declared non-goal ([no]) as open, so a.never is listed too.
-    assert [r["row_id"] for r in out["ready"]] == ["a.parse", "a.never"]
+    # a.load is leased, and a.never is a declared non-goal ([no]): a decision, never ready.
+    assert [r["row_id"] for r in out["ready"]] == ["a.parse"]
     assert all(r["why"] for r in out["ready"])
     on = {(b["project"], b["row_id"], b["on"]) for b in out["blocked"]}
     assert on == {
