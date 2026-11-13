@@ -59,7 +59,7 @@ COMMANDS = {
     ),
     "site": (
         "projecthub.site.live",
-        "write the site's data from the product repos and Project 1",
+        "write the site's data from Project 1 alone",
     ),
     "export": ("projecthub.site.export", "write portfolio.json for the site"),
     "query": (
