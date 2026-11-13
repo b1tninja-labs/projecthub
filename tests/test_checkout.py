@@ -52,7 +52,7 @@ def test_projects_without_a_public_repository_are_reported_not_guessed(
     assert (
         "checked out 1 of 1" in out
         and "no public repository:" in out
-        and "rfclib" in out
+        and "registrata" in out
     )
 
 

@@ -373,7 +373,6 @@ LADDERS: dict[str, LadderSpec] = {
 
 # Project name -> directory, where they differ.
 DIRECTORIES = {
-    "rfclib": "rfclibrary",
     # Renamed from pyrwhois; the checkout folder keeps the old name until it can be renamed.
     "registrata": "pyrwhois",
 }
@@ -386,7 +385,6 @@ HAND_OWNED = (
     "ctspy",
     "pkix",
     "asn1core",
-    "zimlore",
     "keyproof",
     "localns",
     "trustatlas",

@@ -10,7 +10,7 @@ Sources, in order of authority:
   a transcription of PORTFOLIO.md sections 4 and 6, checked by the shell generator's own tests).
 - the disk, through deps.py, for whether a project is absent, a plan, a shell or code, and its obligation
   table (ROADMAP.md, or PLAN.md where a project plans there) for how many rows are done.
-- each checkout's git remote for its GitHub repository, so a renamed repository (rfclibrary -> rfclib) is
+- each checkout's git remote for its GitHub repository, so a renamed repository (pyrwhois -> registrata) is
   read, not remembered.
 
 The few projects outside POSITION are listed in EXTRA with the PORTFOLIO.md section they come from. Every one
@@ -96,22 +96,6 @@ EXTRA: dict[
         "trustatlas",
         "the trust-anchor supply chain, mapped",
         "PORTFOLIO.md s5: deliberately unbuilt, after certledger's store",
-    ),
-    "rfclib": (
-        "Reference",
-        0,
-        0,
-        "rfclibrary",
-        "every published RFC as precise, citable context for agents, served over MCP",
-        "reference library: 'never state an RFC from memory'",
-    ),
-    "zimlore": (
-        "Reference",
-        0,
-        0,
-        "zimlore",
-        "offline language and framework documentation (Kiwix ZIM) as dated, citable context for agents",
-        "PORTFOLIO.md s4 reference libraries (2026-11-07)",
     ),
     "registrata": (
         "Library",
@@ -212,8 +196,8 @@ EXTRA: dict[
         0,
         0,
         "primarysource",
-        "one package: a core plus collections (rfc, itu, nist, usb, ...) behind extras",
-        "reference library: PORTFOLIO.md s3 and s4, s9 items 13 and 15 (itulib, nistlib and usblib moved in and archived 2026-11-13)",
+        "one package: a core plus collections (rfc, itu, nist, usb, zim, cve, ...) behind extras",
+        "reference library: PORTFOLIO.md s3 and s4, s9 items 13 and 15 (rfclib, itulib, nistlib, usblib and zimlore moved in and were archived 2026-11-13; cvelib moved in as `cve` and was never registered)",
     ),
     # sdk-forge until 2026-11-12, when it was retired into this repository (PORTFOLIO.md s9 item 12).
     "projecthub": (

@@ -92,18 +92,17 @@ def test_a_project_directory_is_unique_and_non_empty():
 def test_directories_names_the_projects_whose_folder_is_named_otherwise():
     """registry.json has no directory field, so this is the only place the mapping exists.
 
-    Without it `rfclib` resolves to `D:/code/rfclib`, which does not exist, and the name reads as absent
-    even though `rfclibrary/` holds code and a matrix on disk.
+    Without it `registrata` resolves to `D:/code/registrata`, which does not exist, and the name reads as absent
+    even though `pyrwhois/` holds code and a matrix on disk.
     """
     got = p.directories()
-    assert got["rfclib"] == "rfclibrary"
     assert got["registrata"] == "pyrwhois"
     assert all(name != folder for name, folder in got.items()), (
         "a project named after its own directory needs no entry"
     )
 
 
-@pytest.mark.parametrize("name", ["rfclib", "registrata"])
+@pytest.mark.parametrize("name", ["registrata"])
 def test_a_registered_project_resolves_to_the_directory_on_disk(
     name, monkeypatch, tmp_path
 ):

@@ -234,12 +234,12 @@ def test_matrix_discovery_follows_the_aliases_and_the_overrides(tmp_path):
     _write(tmp_path / "shell" / "PLAN.md", row)
     _write(tmp_path / "planner" / "ROADMAP.md", "# no matrix here\n")
     _write(tmp_path / "planner" / "PLAN.md", row)
-    _write(tmp_path / "rfclibrary" / "ROADMAP.md", row)
+    _write(tmp_path / "pyrwhois" / "ROADMAP.md", row)
     _write(tmp_path / "namespy" / "ROADMAP.md", row)
     _write(tmp_path / "namespy" / "docs" / "roadmap.md", EMOJI)
     assert r.matrix_path(tmp_path, "shell") == tmp_path / "shell" / "ROADMAP.md"
     assert r.matrix_path(tmp_path, "planner") == tmp_path / "planner" / "PLAN.md"
-    assert r.matrix_path(tmp_path, "rfclib") == tmp_path / "rfclibrary" / "ROADMAP.md"
+    assert r.matrix_path(tmp_path, "registrata") == tmp_path / "pyrwhois" / "ROADMAP.md"
     assert (
         r.matrix_path(tmp_path, "namespy")
         == tmp_path / "namespy" / "docs" / "roadmap.md"
