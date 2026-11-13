@@ -52,17 +52,22 @@ def test_every_registry_name_is_a_generated_shell_or_is_in_extra():
     assert orphans == [], f"registered but positioned nowhere: {orphans}"
 
 
-def test_nistlib_and_usblib_are_registered():
-    """Both carry a ROADMAP.md and a pyproject.toml, so verify.PROJECTS gates them; the registry must agree."""
-    assert {"nistlib", "usblib"} <= set(PROJECTS)
+def test_archived_reference_libraries_are_gone_and_primarysource_holds_them():
+    """itulib, nistlib and usblib moved into primarysource's `itu`, `nist` and `usb` collections and their
+    repositories were archived on 2026-11-13 (PORTFOLIO.md s9 items 13 and 15): nothing gates, syncs or
+    resolves them any more, and an edge that pointed at one points at primarysource."""
+    archived = {"itulib", "nistlib", "usblib"}
+    assert not archived & set(PROJECTS)
     entries = {e.name: e for e in p.entries()}
-    for name in ("nistlib", "usblib"):
-        entry = entries[name]
-        assert entry.kind == "Reference", name
-        assert (entry.tier, entry.wave) == (0, 0), (
-            f"{name} is a reference library: untiered and unsequenced, which is not Wave 0"
-        )
-        assert entry.source.startswith("reference library"), name
+    assert not archived & set(entries)
+    assert not archived & {d for e in entries.values() for d in e.depends}
+    assert not archived & set(p.directories())
+    core = entries["primarysource"]
+    assert core.kind == "Reference"
+    assert (core.tier, core.wave) == (0, 0)
+    assert "collections (rfc, itu, nist, usb" in core.what
+    assert "archived 2026-11-13" in core.source
+    assert "primarysource" in entries["miblang"].depends
 
 
 def test_every_name_a_dependency_arrow_names_is_registered():
@@ -87,21 +92,18 @@ def test_a_project_directory_is_unique_and_non_empty():
 def test_directories_names_the_projects_whose_folder_is_named_otherwise():
     """registry.json has no directory field, so this is the only place the mapping exists.
 
-    Without it `nistlib` resolves to `D:/code/nistlib`, which does not exist, and the name reads as absent
-    even though `nistlibrary/` holds code and a matrix on disk.
+    Without it `rfclib` resolves to `D:/code/rfclib`, which does not exist, and the name reads as absent
+    even though `rfclibrary/` holds code and a matrix on disk.
     """
     got = p.directories()
-    assert got["nistlib"] == "nistlibrary"
-    assert got["usblib"] == "usblibrary"
     assert got["rfclib"] == "rfclibrary"
-    assert got["itulib"] == "itulibrary"
     assert got["registrata"] == "pyrwhois"
     assert all(name != folder for name, folder in got.items()), (
         "a project named after its own directory needs no entry"
     )
 
 
-@pytest.mark.parametrize("name", ["nistlib", "usblib"])
+@pytest.mark.parametrize("name", ["rfclib", "registrata"])
 def test_a_registered_project_resolves_to_the_directory_on_disk(
     name, monkeypatch, tmp_path
 ):
@@ -149,5 +151,25 @@ def test_extra_entries_carry_their_dependencies_into_the_graph():
         "gitobj",
         "pkgformats",
         "distbuild",
+        "attestkit",
+        "advisoryformats",
     ):
         assert name in by_name, name
+
+
+def test_round_4_support_libraries_carry_their_edges():
+    """PORTFOLIO.md section 9 item 15: pkgtrust -> attestkit -> pkgformats.vocab and sigwire[verify];
+    advisoryformats -> pkgformats and devicespy; pkgtrust -> advisoryformats. sigwire never imports attestkit."""
+    deps = {e.name: set(e.depends) for e in p.entries()}
+    assert deps["attestkit"] == {"pkgformats", "sigwire"}
+    assert deps["advisoryformats"] == {"pkgformats", "devicespy"}
+    assert {"attestkit", "advisoryformats"} <= deps["pkgtrust"]
+    assert "attestkit" not in deps["sigwire"]
+    for name in ("attestkit", "advisoryformats"):
+        entry = next(e for e in p.entries() if e.name == name)
+        assert (entry.kind, entry.tier, entry.wave, entry.directory) == (
+            "Library",
+            0,
+            0,
+            name,
+        )

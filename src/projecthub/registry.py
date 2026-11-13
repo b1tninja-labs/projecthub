@@ -105,30 +105,6 @@ EXTRA: dict[
         "every published RFC as precise, citable context for agents, served over MCP",
         "reference library: 'never state an RFC from memory'",
     ),
-    "itulib": (
-        "Reference",
-        0,
-        0,
-        "itulibrary",
-        "the ITU-T ASN.1 and X.500 text the RFC series cannot reach, served the same way",
-        "reference library: asn1core's [verify against X.690] markers",
-    ),
-    "nistlib": (
-        "Reference",
-        0,
-        0,
-        "nistlibrary",
-        "NIST publications as citable context for agents, served over MCP",
-        "reference library: default to the current final revision, every revision reachable",
-    ),
-    "usblib": (
-        "Reference",
-        0,
-        0,
-        "usblibrary",
-        "USB-IF specifications as citable context for agents, served over MCP",
-        "reference library: section text from the chosen PDF, with citations",
-    ),
     "zimlore": (
         "Reference",
         0,
@@ -189,7 +165,38 @@ EXTRA: dict[
         "pkgtrust",
         "distribution supply-chain measurement: how distributions fetch, verify and patch upstream source",
         "PORTFOLIO.md s3 and s4 measurement tooling",
-        ("archivekit", "sigwire", "gitobj", "pkgformats", "pgpenv", "kconfigpy"),
+        (
+            "archivekit",
+            "sigwire",
+            "gitobj",
+            "pkgformats",
+            "pgpenv",
+            "kconfigpy",
+            "attestkit",
+            "advisoryformats",
+        ),
+    ),
+    # Support libraries scaffolded in round 4 (2026-11-13), laid out by hand like pkgformats: the shell generator
+    # positions only the generated protocol shells, so these, like every support library, live here alone.
+    "attestkit": (
+        "Library",
+        0,
+        0,
+        "attestkit",
+        "SBOM and attestation documents: a neutral BOM model, CycloneDX 1.7 and SPDX 3.0.1 readers and writers, SPDX 2.3, in-toto Statements, SLSA provenance",
+        "PORTFOLIO.md s9 item 15 (SBOMs and attestations); support library",
+        # pkgformats.vocab for purl; sigwire's DSSE parse layer, and sigwire[verify] for the verify extra
+        ("pkgformats", "sigwire"),
+    ),
+    "advisoryformats": (
+        "Library",
+        0,
+        0,
+        "advisoryformats",
+        "vulnerability advisory formats (OSV, CVE record, Alpine secdb, Arch tracker, GLSA, CSAF, OpenVEX) with primary and secondary evidence labels",
+        "PORTFOLIO.md s4 support libraries; s9 item 15",
+        # pkgformats.vocab for purl and versions; devicespy.xmlsafe for GLSA
+        ("pkgformats", "devicespy"),
     ),
     "distbuild": (
         "Tooling",
@@ -205,8 +212,8 @@ EXTRA: dict[
         0,
         0,
         "primarysource",
-        "the shared core of the reference libraries: model, ref grammar, pager, result footer, home resolution",
-        "reference library core: PORTFOLIO.md s3 and s4, s9 item 13 (adoption by the other libraries is planned, not yet an import)",
+        "one package: a core plus collections (rfc, itu, nist, usb, ...) behind extras",
+        "reference library: PORTFOLIO.md s3 and s4, s9 items 13 and 15 (itulib, nistlib and usblib moved in and archived 2026-11-13)",
     ),
     # sdk-forge until 2026-11-12, when it was retired into this repository (PORTFOLIO.md s9 item 12).
     "projecthub": (

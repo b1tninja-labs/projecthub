@@ -128,8 +128,8 @@ def test_a_dependency_that_is_only_a_plan_withholds_the_row():
     got = pick(
         [project("miblang"), row("catalogue.modules_of()", "Ready", "miblang")],
         deps=lambda root, name: (
-            ["itulib"],
-            ["hard dependency itulib is plan only on disk"],
+            ["primarysource"],
+            ["hard dependency primarysource is plan only on disk"],
         ),
     )
     assert "stop" in got, (

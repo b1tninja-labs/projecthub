@@ -1858,11 +1858,11 @@ PROJECTS: list[dict[str, Any]] = [
             "M2 cross-module imports and the resolver, answering name to OID and OID to name with the edition attached",
             "M3 the RFC 2579 conventions and their SUB-TYPE ranges as asn1core constraints rather than a parallel type system",
             "M4 RFC 2580 conformance statements reduced to an obligation set",
-            "M5 the ITU-T formal-description catalogue through itulib, with digest verification and edition pinning: blocked until itulib mirrors artifacts as well as prose",
+            "M5 the ITU-T formal-description catalogue through primarysource's itu collection, with digest verification and edition pinning: blocked until that collection mirrors artifacts as well as prose",
             "M6 publication: 0.1.0 with a measured claim, how many published modules parse and how many fail and why",
         ],
         "extras": {
-            "catalogue": [("itulib", "0.1")],
+            "catalogue": [("primarysource", "0.1")],
             "conventions": [("asn1core", "0.1")],
         },
         "cli": "miblang resolve IF-MIB::ifPhysAddress --prove",

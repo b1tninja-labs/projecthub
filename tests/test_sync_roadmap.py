@@ -443,21 +443,21 @@ def test_unsafe_or_removed_options_are_refused(flags, monkeypatch):
 # ---------------------------------------------------------------------------------------------- targets
 
 
-def test_itulib_resolves_to_itulibrary_its_plan_matrix_and_its_own_repo(tmp_path):
-    folder = tmp_path / "itulibrary"
+def test_rfclib_resolves_to_rfclibrary_its_plan_matrix_and_its_own_repo(tmp_path):
+    folder = tmp_path / "rfclibrary"
     folder.mkdir()
     (folder / "PLAN.md").write_text(PKIX_ROW + "\n", encoding="utf-8")
     seen: list[str] = []
 
     def remote(root, directory):
         seen.append(directory)
-        return "b1tninja/itulib"
+        return "b1tninja-labs/rfclib"
 
-    target = s.resolve(tmp_path, "itulib", "someone", remote)
+    target = s.resolve(tmp_path, "rfclib", "someone", remote)
     assert target.directory == folder
     assert target.matrix == folder / "PLAN.md"
-    assert target.repo == "b1tninja/itulib"
-    assert seen == ["itulibrary"]
+    assert target.repo == "b1tninja-labs/rfclib"
+    assert seen == ["rfclibrary"]
 
 
 def test_a_project_with_no_remote_falls_back_to_the_org(tmp_path):

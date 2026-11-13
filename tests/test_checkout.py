@@ -26,14 +26,17 @@ def test_a_moved_repo_is_cloned_from_its_new_owner_into_the_registry_directory(
     tmp_path,
 ):
     run = runner(
-        {"b1tninja": ["pkix", "itulib", "namespy"], "b1tninja-labs": ["pkix", "itulib"]}
+        {
+            "b1tninja": ["pkix", "registrata", "namespy"],
+            "b1tninja-labs": ["pkix", "registrata"],
+        }
     )
     assert C.main(["--dest", str(tmp_path)], run) == 0
     clones = {c[-1]: c[-2] for c in run.calls if c[:2] == ["git", "clone"]}  # type: ignore[attr-defined]
     assert clones[str(tmp_path / "pkix")] == "https://github.com/b1tninja-labs/pkix.git"
     assert (
-        clones[str(tmp_path / "itulibrary")]
-        == "https://github.com/b1tninja-labs/itulib.git"
+        clones[str(tmp_path / "pyrwhois")]
+        == "https://github.com/b1tninja-labs/registrata.git"
     ), "the directory the registry names"
     assert (
         clones[str(tmp_path / "namespy")] == "https://github.com/b1tninja/namespy.git"

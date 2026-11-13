@@ -48,7 +48,7 @@ POSITION = {
     "devicespy": (4, 5, ()),
     # Tier 4, wave 5: created against the no-new-shells rule on 2026-11-07, which is why
     # it is hold-tier despite a real gap: pysmi 2.0.0 occupies the job and is current.
-    "miblang": (4, 5, ("asn1core", "itulib")),
+    "miblang": (4, 5, ("asn1core", "primarysource")),
 }
 
 
@@ -172,11 +172,11 @@ DEPENDS_WHY = {
     "the grammar",
     (
         "miblang",
-        "itulib",
+        "primarysource",
     ): "the modules this reads are normative artifacts published as "
     "text alongside a Recommendation, and an OID answer is only "
     "as good as the edition it was parsed from, so fetching, "
-    "digesting and pinning that corpus is itulib's job rather "
+    "digesting and pinning that corpus is primarysource's itu collection's job rather "
     "than a second copy of it per project",
     # Edges decided by PORTFOLIO.md section 9 item 15 (2026-11-13).
     ("rpkit", "pkix"): "RPKI resource certificates are X.509, and path building and "

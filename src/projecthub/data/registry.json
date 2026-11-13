@@ -30,9 +30,7 @@
     "bgpfeed",
     "routevalid",
     "lgc",
-    "miblang",
-    "nistlib",
-    "usblib"
+    "miblang"
   ],
   "position": {
     "rpkit": [
@@ -222,7 +220,7 @@
       5,
       [
         "asn1core",
-        "itulib"
+        "primarysource"
       ]
     ]
   }
