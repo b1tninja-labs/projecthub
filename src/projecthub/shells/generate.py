@@ -1691,7 +1691,7 @@ def render_index(projects):
 #   * Cline reads AGENTS.md, ~/.agents/AGENTS.md, .clinerules/ and .cline/rules/,
 #     combining the files found in a rules directory. Conditional rules take a
 #     `paths:` glob in YAML front matter and activate when a matching file is in
-#     context, so the rfclib procedure can load exactly when protocol code is
+#     context, so the RFC procedure can load exactly when protocol code is
 #     being edited rather than permanently occupying the context window.
 #   * Both agent-guidance sources say the same thing about length: an
 #     instruction file should hold only what the agent cannot infer from the
@@ -1754,8 +1754,8 @@ rather than merely incomplete.
    Never return an empty value, an empty collection, or a result object that reports
    success. A protocol library that answers nothing is worse than one that refuses
    to answer, and `tests/test_public_api.py` enforces that every stub is loud.
-3. **Normative text is never paraphrased from memory.** Fetch it with `rfclib` and
-   cite the section. If the text you fetch does not say what the obligation claims,
+3. **Normative text is never paraphrased from memory.** Fetch it with the `rfc_*`
+   tools and cite the section. If the text you fetch does not say what the obligation claims,
    the obligation is wrong: fix the roadmap row and say so in the commit.
 4. **Dependencies.** `pyproject.toml` here declares <<DEPS>>. Adding a runtime
    dependency needs a paragraph of justification in `docs/strategy.md` explaining
@@ -1770,7 +1770,7 @@ rather than merely incomplete.
 
 ## Protocol work
 
-`.clinerules/10-rfclib.md` describes the `rfclib` calls to make for each obligation
+`.clinerules/10-rfclib.md` describes the `rfc_*` tool calls to make for each obligation
 and lists the section refs for this project. If you are not running in Cline, the
 same procedure applies: confirm the document, read its errata, pull the normative
 statements, then write code.
@@ -1784,32 +1784,32 @@ paths:
   - "tests/**"
 ---
 
-# Working from the RFC with rfclib
+# Working from the RFC with the rfc_ tools
 
-The `rfclib` MCP server is the authority for what a specification says. Model
-knowledge of RFC numbers and wording is not reliable here, and this portfolio has
-already had to correct numbers that looked right (DHCPv6 is RFC 9915, not 8415;
-RRDP is RFC 8182, not 9183).
+The `rfc_*` tools of the `primarysource` MCP server are the authority for what a
+specification says. Model knowledge of RFC numbers and wording is not reliable
+here, and this portfolio has already had to correct numbers that looked right
+(DHCPv6 is RFC 9915, not 8415; RRDP is RFC 8182, not 9183).
 
 <<SPINENOTE>>
 
 Work through the obligations in `ROADMAP.md` one row at a time. For each row:
 
-1. **Confirm the document.** `rfclib.info("<<REF>>")` returns status,
+1. **Confirm the document.** `rfc_info("<<REF>>")` returns status,
    publication date, the updates/obsoletes graph and an errata summary. If the
    document is obsolete or has a successor, stop and flag the roadmap row before
    writing any code.
-2. **Read the errata.** `rfclib.errata("<<REF>>")` gives the verified
+2. **Read the errata.** `rfc_errata("<<REF>>")` gives the verified
    corrections with their replacement text. A verified erratum is the
    specification: an implementation that follows the original text is wrong.
    RFC 4795 carries six, RFC 9162 one, RFC 6960 one.
-3. **Pull only the normative statements.** `rfclib.read("<<REF>><<SEC0>>",
+3. **Pull only the normative statements.** `rfc_read("<<REF>><<SEC0>>",
    view="normative")` returns the MUST, SHOULD and MAY sentences in that scope.
    Read them before choosing a data structure, not after.
 4. **Find the specific rule instead of guessing its name.**
-   `rfclib.grep("<<REF>>", pattern="<<FIELD>>")` searches one document for a
+   `rfc_grep("<<REF>>", pattern="<<FIELD>>")` searches one document for a
    field name, ABNF rule or error code, which is cheaper than reading a section.
-5. **Cite rather than paraphrase.** `rfclib.cite("<<REF>><<SEC0>>",
+5. **Cite rather than paraphrase.** `rfc_cite("<<REF>><<SEC0>>",
    style="verbose")` yields label, title, date, status, anchor URL and errata
    status. Put that in the docstring or the commit message. Never restate normative
    prose in your own words.
@@ -1820,9 +1820,9 @@ table like `RFC9162#table-2`. Reads end with `next: <ref>` when the scope exceed
 budget, so page through rather than guessing. Paragraph markers are printed on each
 paragraph so a single one can be quoted exactly.
 
-To decide *which* document applies, `rfclib.search("...", scope="documents")`
+To decide *which* document applies, `rfc_search("...", scope="documents")`
 matches titles and abstracts while `scope="sections"` says which passage answers the
-question. `rfclib.outline("<<REF>>", contains="security")` lists sections
+question. `rfc_outline("<<REF>>", contains="security")` lists sections
 with their line ranges.
 
 ## Section refs for this project
@@ -1849,9 +1849,9 @@ Implement the next unchecked row of `ROADMAP.md` in this project, working from
 `docs/rfc-map.md` for the document and section.
 
 1. Read the row and quote its spec anchor and evidence cells back. Confirm the
-   document with `rfclib.info` and `rfclib.errata` before writing code, and stop if
+   document with `rfc_info` and `rfc_errata` before writing code, and stop if
    it turns out to be obsolete or superseded.
-2. Fetch the normative text with `rfclib.read(..., view="normative")`. If what you
+2. Fetch the normative text with `rfc_read(..., view="normative")`. If what you
    fetch does not state what the row claims, say so and fix the row rather than
    coding to a wrong requirement.
 3. Write the test first, using recorded fixtures rather than a live endpoint. Run it
@@ -1861,7 +1861,7 @@ Implement the next unchecked row of `ROADMAP.md` in this project, working from
 5. Flip the row to done and name the test in its evidence cell. Do not flip the row
    if the test does not exist and pass.
 6. Run every gate listed in `AGENTS.md` and fix what fails.
-7. Commit with the citation from `rfclib.cite` in the message body. No
+7. Commit with the citation from `rfc_cite` in the message body. No
    `Co-Authored-By` trailer.
 """
 
@@ -1896,7 +1896,7 @@ def docs_block(p):
         sect = chr(167)
         for section in (entry.get("sections") or [])[:2]:
             lines.append(
-                "  - `rfclib.read("
+                "  - `rfc_read("
                 + quote
                 + "RFC"
                 + number
@@ -1911,7 +1911,7 @@ def docs_block(p):
             )
         if entry.get("errata"):
             lines.append(
-                "  - `rfclib.errata(" + quote + "RFC" + number + quote + ")` first"
+                "  - `rfc_errata(" + quote + "RFC" + number + quote + ")` first"
             )
     return chr(10).join(lines) if lines else "- see docs/rfc-map.md"
 
@@ -1951,10 +1951,10 @@ def doc_number(entry):
 def spine_facts(p):
     docs = p.get("docs", [])
     first = docs[0] if docs else {}
-    # The ref used inside the rfclib call examples has to be one rfclib can
+    # The ref used inside the rfc_ call examples has to be one the rfc_ tools can
     # resolve, so it is the first numbered entry of the map rather than the first
     # entry: on a non-IETF project the primary document is a Broadband Forum,
-    # UPnP or ATIS specification, and rfclib has no such document.
+    # UPnP or ATIS specification, and the RFC collection has no such document.
     spine = next((entry for entry in docs if doc_number(entry)), None)
     spinenote = ""
     if spine is None:
@@ -1970,7 +1970,7 @@ def spine_facts(p):
         spinenote = (
             "The primary document of this project is "
             + str(first.get("label") or "docs/rfc-map.md")
-            + ", which is not an RFC, so the `rfclib` calls below resolve only the RFC\n"
+            + ", which is not an RFC, so the `rfc_*` calls below resolve only the RFC\n"
             'refs listed under "Section refs for this project"; read the non-RFC\n'
             "specification from its own publisher."
         )
@@ -1990,7 +1990,7 @@ def errata_block(p):
     notes = [n for n in p.get("errata", []) if n]
     if not notes:
         notes = [
-            "Run `rfclib.errata` on every document listed in `docs/rfc-map.md` "
+            "Run `rfc_errata` on every document listed in `docs/rfc-map.md` "
             "before implementing its rows."
         ]
     return chr(10).join("- " + n for n in notes)
