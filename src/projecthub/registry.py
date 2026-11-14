@@ -64,8 +64,9 @@ EXTRA: dict[
         "certledger",
         "independent CT acquisition and publication",
         "PORTFOLIO.md s4 Tier 1, s7 wave 1",
-        # pkix for cl.dane-topmost-signed-by (RFC 7671 s5.2.3 para 10); asn1core for I3
-        ("asn1core", "pkix"),
+        # pkix for cl.dane-topmost-signed-by (RFC 7671 s5.2.3 para 10); asn1core for I3; ctspy is a runtime
+        # dependency in its pyproject (round 12)
+        ("asn1core", "pkix", "ctspy"),
     ),
     "namespy": (
         "Library",
@@ -126,7 +127,10 @@ EXTRA: dict[
         "sigwire",
         "lightweight signature formats, with strict verification (`sigwire[verify]`) over `cryptography`",
         "PORTFOLIO.md s4 support libraries; s9 item 15 (sigprim merged in)",
-        ("pgpenv",),
+        # No sibling. It carried ("pgpenv",) until round 12: sigwire's armor.py only names pgpenv as the package
+        # that owns OpenPGP parsing, it imports nothing from it, and pgpenv declares sigwire[verify], so the edge
+        # was stale and pointed the wrong way (a cycle with pgpenv's own).
+        (),
     ),
     "gitobj": (
         "Library",
@@ -144,7 +148,10 @@ EXTRA: dict[
         "pkgformats",
         "package formats in strict layers: deb, rpm, pacman, apk, xbps, ipk, nix, Gentoo, with PKGBUILD reading",
         "PORTFOLIO.md s4 support libraries; s9 item 15 (owner of the PKGBUILD reader)",
-        ("archivekit", "sigwire", "pgpenv"),
+        # sigwire is kept as the planned consumer of signature facts (row pf.sig.swap, "M4 adapter swap"), not an
+        # import. pgpenv was dropped in round 12: pf.rpm.issuer says the OpenPGP packet fields belong to sigwire,
+        # and pacmandb.py only mentions pgpenv in a docstring.
+        ("archivekit", "sigwire"),
     ),
     "pkgtrust": (
         "Tooling",
@@ -153,13 +160,14 @@ EXTRA: dict[
         "pkgtrust",
         "distribution supply-chain measurement: how distributions fetch, verify and patch upstream source",
         "PORTFOLIO.md s3 and s4 measurement tooling",
+        # archivekit and pgpenv are planned consumers (ROADMAP rows MV6 and MV8), not imports yet. kconfigpy was
+        # dropped in round 12: nothing in pkgtrust names it, and row R165 reads Kconfig itself.
         (
             "archivekit",
             "sigwire",
             "gitobj",
             "pkgformats",
             "pgpenv",
-            "kconfigpy",
             "attestkit",
             "advisoryformats",
         ),
@@ -174,9 +182,9 @@ EXTRA: dict[
         "SBOM and attestation documents: a neutral BOM model, CycloneDX 1.7 and SPDX 3.0.1 readers and writers, SPDX 2.3, in-toto Statements, SLSA provenance",
         "PORTFOLIO.md s9 item 15 (SBOMs and attestations); support library",
         # pkgformats.vocab for purl; sigwire's DSSE parse layer, and sigwire[verify] for the verify extra; the
-        # `sigstore` extra adds asn1core, pkix and signeddata (ctspy too, not carried here). It does not declare
-        # tufverify yet: add that edge when its pyproject does.
-        ("pkgformats", "sigwire", "asn1core", "pkix", "signeddata"),
+        # `sigstore` extra adds asn1core, pkix, signeddata and ctspy. It does not declare tufverify yet: add that
+        # edge when its pyproject does.
+        ("pkgformats", "sigwire", "asn1core", "pkix", "signeddata", "ctspy"),
     ),
     "advisoryformats": (
         "Library",
@@ -185,8 +193,8 @@ EXTRA: dict[
         "advisoryformats",
         "vulnerability advisory formats (OSV, CVE record, Alpine secdb, Arch tracker, GLSA, CSAF, OpenVEX) with primary and secondary evidence labels",
         "PORTFOLIO.md s4 support libraries; s9 item 15",
-        # pkgformats.vocab for purl and versions; devicespy.xmlsafe for GLSA
-        ("pkgformats", "devicespy"),
+        # pkgformats.vocab for purl and versions; devicespy.xmlsafe for GLSA; attestkit declared in round 12
+        ("pkgformats", "devicespy", "attestkit"),
     ),
     # Support libraries scaffolded in round 8 (2026-11-13) and registered in round 9, laid out by hand like attestkit.
     "idnawire": (

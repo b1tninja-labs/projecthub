@@ -47,7 +47,8 @@
       2,
       2,
       [
-        "asn1core"
+        "asn1core",
+        "sigwire"
       ]
     ],
     "pkix": [
@@ -55,7 +56,8 @@
       2,
       [
         "asn1core",
-        "idnawire"
+        "idnawire",
+        "sigwire"
       ]
     ],
     "revokekit": [
@@ -63,7 +65,8 @@
       2,
       [
         "asn1core",
-        "pkix"
+        "pkix",
+        "sigwire"
       ]
     ],
     "rtrkit": [
@@ -79,7 +82,9 @@
       [
         "rpkit",
         "rtrkit",
-        "pathattr"
+        "pathattr",
+        "bgpfeed",
+        "bmpkit"
       ]
     ],
     "dnssd-srp": [
@@ -131,7 +136,9 @@
     "lgc": [
       3,
       5,
-      []
+      [
+        "pathattr"
+      ]
     ],
     "turnkit": [
       3,
@@ -141,12 +148,16 @@
     "ohttp": [
       3,
       5,
-      []
+      [
+        "namespy"
+      ]
     ],
     "h3tunnel": [
       3,
       5,
-      []
+      [
+        "sfields"
+      ]
     ],
     "sfields": [
       3,
@@ -163,7 +174,8 @@
       2,
       [
         "asn1core",
-        "pkix"
+        "pkix",
+        "sigwire"
       ]
     ],
     "ntspy": [
@@ -180,7 +192,8 @@
       4,
       5,
       [
-        "asn1core"
+        "asn1core",
+        "sigwire"
       ]
     ],
     "enrollkit": [
@@ -189,7 +202,8 @@
       [
         "asn1core",
         "pkix",
-        "signeddata"
+        "signeddata",
+        "sigwire"
       ]
     ],
     "shaken": [

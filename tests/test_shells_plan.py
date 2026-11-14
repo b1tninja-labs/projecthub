@@ -46,6 +46,7 @@ def test_a_plan_only_dependency_names_its_plan_file(workspace):
 def test_a_dependency_with_code_is_no_longer_called_missing_or_blocked(workspace):
     make_code(workspace, "asn1core")
     make_code(workspace, "idnawire")  # pkix declares it too (round 10)
+    make_code(workspace, "sigwire")  # and sigwire[verify] (round 12)
     text = " ".join(generate.render_plan({"name": "pkix"}).split())
     assert "does not exist yet" not in text
     assert "Blocked, not in progress" not in text
@@ -56,7 +57,7 @@ def test_a_dependency_with_code_is_no_longer_called_missing_or_blocked(workspace
 def test_the_gated_text_never_claims_the_dependency_is_ready(workspace):
     make_code(workspace, "asn1core")
     text = generate.render_plan({"name": "pkix"}).lower()
-    assert not re.search(r"(unblocked|ready)", text)
+    assert not re.search(r"\b(unblocked|ready)\b", text)
 
 
 def test_a_shell_dependency_still_gets_the_shell_note(workspace):

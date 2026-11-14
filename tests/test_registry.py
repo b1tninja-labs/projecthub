@@ -162,16 +162,18 @@ def test_round_4_support_libraries_carry_their_edges():
     """PORTFOLIO.md section 9 item 15: pkgtrust -> attestkit -> pkgformats.vocab and sigwire[verify];
     advisoryformats -> pkgformats and devicespy; pkgtrust -> advisoryformats. sigwire never imports attestkit."""
     deps = {e.name: set(e.depends) for e in p.entries()}
-    # the `sigstore` extra's asn1core, pkix and signeddata are declared too (round 10); tufverify is not yet
+    # the `sigstore` extra's asn1core, pkix, signeddata (round 10) and ctspy (round 12) are declared too;
+    # tufverify is not yet
     assert deps["attestkit"] == {
         "pkgformats",
         "sigwire",
         "asn1core",
         "pkix",
         "signeddata",
+        "ctspy",
     }
     assert "tufverify" not in deps["attestkit"]
-    assert deps["advisoryformats"] == {"pkgformats", "devicespy"}
+    assert deps["advisoryformats"] == {"pkgformats", "devicespy", "attestkit"}
     assert {"attestkit", "advisoryformats"} <= deps["pkgtrust"]
     assert "attestkit" not in deps["sigwire"]
     for name in ("attestkit", "advisoryformats"):
@@ -240,3 +242,79 @@ def test_round_10_edges_follow_the_pyprojects_that_declare_them():
         )
     assert "TLS 1.3" in entries["tlswire"].what
     assert "QUIC" in entries["quicmux"].what
+
+
+def test_the_registry_json_position_and_the_generator_position_agree():
+    """Two copies of the same table: `data/registry.json` feeds the board and `graph`, and
+    `shells/data/position.py` feeds the generated docs/plan.md. An edge in one only is drawn by half the tools."""
+    from projecthub.shells.data import position
+
+    assert dict(POSITION) == dict(position.POSITION)
+
+
+# (consumer, dependency, where its pyproject declares it); each was missing from the registry until round 12.
+DECLARED_EDGES = [
+    ("ctspy", "sigwire", "dependencies"),
+    ("pkix", "sigwire", "dependencies"),
+    ("revokekit", "sigwire", "dependencies"),
+    ("pgpenv", "sigwire", "dependencies"),
+    ("enrollkit", "sigwire", "dependencies"),
+    ("signeddata", "sigwire", "the verify extra"),
+    ("certledger", "ctspy", "dependencies"),
+    ("attestkit", "ctspy", "the sigstore extra"),
+    ("h3tunnel", "sfields", "dependencies"),
+    ("advisoryformats", "attestkit", "dependencies"),
+    ("lgc", "pathattr", "the codec extra"),
+    ("ohttp", "namespy", "the dns extra"),
+    ("routevalid", "bgpfeed", "the feeds extra"),
+    ("routevalid", "bmpkit", "the feeds extra"),
+]
+
+
+@pytest.mark.parametrize(("consumer", "dependency", "where"), DECLARED_EDGES)
+def test_an_edge_a_pyproject_declares_is_in_the_registry(consumer, dependency, where):
+    deps = {e.name: set(e.depends) for e in p.entries()}
+    assert dependency in deps[consumer], f"{consumer} declares {dependency} in {where}"
+
+
+def test_a_generated_edge_has_a_stated_reason():
+    """`dep_line` falls back to a generic sentence when DEPENDS_WHY has no entry, so an edge added to POSITION
+    without one reads as a bare assertion in the generated plan."""
+    from projecthub.shells.data.position import DEPENDS_WHY
+
+    missing = sorted(
+        (name, dep)
+        for name, (_tier, _wave, deps) in POSITION.items()
+        for dep in deps
+        if (name, dep) not in DEPENDS_WHY
+    )
+    assert missing == [], f"edges with no DEPENDS_WHY: {missing}"
+
+
+def test_the_stale_edges_removed_in_round_12_stay_removed():
+    """sigwire never imported pgpenv (it names it in a docstring) and pgpenv declares sigwire[verify], so the
+    old arrow was stale and, with the new one, a cycle; pkgformats and pkgtrust do not use pgpenv or kconfigpy
+    as pkgformats' rows and pkgtrust's R165 say."""
+    deps = {e.name: set(e.depends) for e in p.entries()}
+    assert "pgpenv" not in deps["sigwire"]
+    assert "pgpenv" not in deps["pkgformats"]
+    assert "kconfigpy" not in deps["pkgtrust"]
+
+
+def test_the_dependency_graph_has_no_cycle():
+    deps = {e.name: set(e.depends) for e in p.entries()}
+    done: set[str] = set()
+    visiting: list[str] = []
+
+    def visit(name: str) -> None:
+        assert name not in visiting, f"cycle: {' -> '.join([*visiting, name])}"
+        if name in done:
+            return
+        visiting.append(name)
+        for dep in sorted(deps.get(name, ())):
+            visit(dep)
+        visiting.pop()
+        done.add(name)
+
+    for name in sorted(deps):
+        visit(name)
