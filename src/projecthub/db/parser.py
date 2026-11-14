@@ -23,6 +23,11 @@ The grammar, all of it:
   invents an M-number for a project that does not use them.
 - Matrix files are found per project (D19): ROADMAP.md, then PLAN.md, then docs/roadmap.md, with a path
   override where a project keeps its matrix somewhere specific.
+- The Rust repositories (berkit, cardkit, piv-card) write `| Status | Obligation | Anchor | Test |`: Status
+  first, no id column. `[ok]` is done, `[unread]` (the test passes, the anchor could not be read cleanly from
+  the standard) is partial work and so open, `[open]` is open. Such a row gets a derived id (see
+  `derived_id`), and an `[ok]` row whose Test cell names no test is reported, not counted: done needs a
+  named test. A project may keep rows in several files (`FRAGMENTS`); `matrix_files` lists them.
 
 The evidence check is strict on purpose. A substring match let `def load_anchor_helper` satisfy
 `::load_anchor` and `def parse_3164` satisfy `::parse`. Here the test file is parsed with `ast`, the name
@@ -33,6 +38,7 @@ and a reference marked `(to be written)` is never evidence.
 from __future__ import annotations
 
 import ast
+import hashlib
 import pathlib
 import re
 from dataclasses import dataclass
@@ -47,6 +53,11 @@ STATES = {
     "[part]": "part",
     "[ ]": "open",
     "[no]": "nongoal",
+    # The Rust repositories' vocabulary. `[unread]` is implemented and tested but its anchor is unconfirmed,
+    # which is unfinished work (partial), never done. Both tokens are kept as written, so an issue says
+    # `[unread]` and not a `[part]` the file never contained.
+    "[open]": "open",
+    "[unread]": "part",
 }
 ALIASES = {
     "partial": "[part]",
@@ -148,6 +159,7 @@ class Problem:
     line: int  # 1-based
     text: str
     reason: str
+    file: str = ""  # set when a project's rows come from several files
 
 
 @dataclass(frozen=True)
@@ -200,15 +212,133 @@ def _row(
     }
 
 
-def parse(text: str) -> Matrix:
-    """Every matrix row in the text, and every row-shaped line that did not parse."""
+# ---------------------------------------------------------------------------------------------- status-first tables
+
+TITLE_LIMIT = 100
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def derived_id(scope: str, obligation: str, taken: set[str]) -> str:
+    """`oid.first-six-words-3f9a1c`: scope, the first words, a hash of the first 80 normalised characters.
+
+    The Rust tables have no id column, so an id is derived from the Obligation text. It survives reordering
+    and inserting rows, which a row number would not (a number silently re-points every later issue at a
+    different obligation). It does not survive an edit to the first 80 normalised characters: that renames
+    the row, and sync then reports the old issue as "no longer a row" and the new row as having no issue,
+    where an edit past them (a count, a date, a test name) changes nothing. Two rows in one scope that agree
+    on those characters are told apart by a `-2`, `-3` suffix in file order.
+    """
+    words = _words(obligation)
+    slug = "-".join(words[:6])[:40].strip("-") or "row"
+    digest = hashlib.sha1(  # noqa: S324 - an id, not security
+        " ".join(words)[:80].encode("utf-8")
+    ).hexdigest()[:6]
+    base = f"{scope}.{slug}-{digest}"
+    ident, n = base, 1
+    while ident in taken:
+        n += 1
+        ident = f"{base}-{n}"
+    taken.add(ident)
+    return ident
+
+
+def _short(text: str, limit: int = TITLE_LIMIT) -> str:
+    flat = " ".join(text.split())
+    if len(flat) <= limit:
+        return flat
+    return flat[:limit].rsplit(" ", 1)[0].rstrip(",;: ") + " ..."
+
+
+def names_a_test(cell: str) -> bool:
+    """Does a Test cell name something? An empty cell, `none` and `none: why` do not."""
+    text = cell.strip().strip("`*").strip().lower()
+    return bool(text) and not re.match(r"none\b", text)
+
+
+def _status_first(
+    lines: list[str],
+    run: list[int],
+    header: list[str],
+    scope: str,
+    source: str,
+    taken: set[str],
+    rows: list[dict[str, str]],
+    problems: list[Problem],
+) -> None:
+    """Rows of a `Status | Obligation | Anchor | Test` table, columns found by header name.
+
+    Done needs a named test: an `[ok]` row whose Test cell is empty, absent or `none` is a problem and is
+    not counted as a row, because a row is done only when a named test would fail if the behaviour
+    regressed. A table with no Test column can therefore hold only unfinished rows.
+    """
+    at = {"status": 0, "obligation": header.index("obligation")}
+    for key, name in (("spec", "anchor"), ("where", "test")):
+        if name in header:
+            at[key] = header.index(name)
+    needed = at["obligation"] + 1
+    for index in run[2:]:
+        line = lines[index]
+        cells = split_cells(line)
+
+        def cell(key: str, cells: list[str] = cells) -> str:
+            found = at.get(key)
+            return cells[found] if found is not None and found < len(cells) else ""
+
+        def problem(reason: str, index: int = index, line: str = line) -> None:
+            problems.append(Problem(index + 1, line, reason, source))
+
+        if len(cells) < needed:
+            problem(f"{len(cells)} cells, the Obligation column needs {needed}")
+            continue
+        found = status_of(cells[0])
+        if found is None:
+            problem(f"{cells[0]!r} is not a recognised status")
+            continue
+        status, note = found
+        if not cell("obligation"):
+            problem("the Obligation cell is empty")
+            continue
+        if STATES[status] == "done" and not names_a_test(cell("where")):
+            problem(f"{status} but the Test cell names no test: done needs one")
+            continue
+        rows.append(
+            {
+                "name": derived_id(scope, cell("obligation"), taken),
+                "title": _short(cell("obligation")),
+                "obligation": cell("obligation"),
+                "spec": cell("spec"),
+                "status": status,
+                "state": STATES[status],
+                "status_note": note,
+                "where": cell("where"),
+                "evidence": "",
+                "milestone": "",
+                "line": str(index + 1),
+                "file": source,
+            }
+        )
+
+
+def parse(text: str, scope: str = "roadmap", source: str = "") -> Matrix:
+    """Every matrix row in the text, and every row-shaped line that did not parse.
+
+    `scope` and `source` matter only to a `Status | Obligation` table, whose rows have no id cell: the id
+    is derived under `scope`, and the row records the file it came from in `source`.
+    """
     lines = text.splitlines()
     rows: list[dict[str, str]] = []
     problems: list[Problem] = []
+    taken: set[str] = set()
     for run in _tables(lines):
         has_header = len(run) > 1 and _is_separator(lines[run[1]])
         if has_header:
             header = [h.lower() for h in split_cells(lines[run[0]])]
+            if header[:1] == ["status"] and "obligation" in header:
+                _status_first(lines, run, header, scope, source, taken, rows, problems)
+                continue
             if not header or header[0] not in MATRIX_FIRST or "status" not in header:
                 continue
             columns: dict[str, int] = {"id": 0}
@@ -407,6 +537,90 @@ def matrix_path(root: pathlib.Path, project: str) -> pathlib.Path | None:
         if path.is_file() and parse(path.read_text(encoding="utf-8")).rows:
             return path
     return None
+
+
+# The Rust repositories, whose tables are `Status | Obligation | Anchor | Test`. Synced, not gated: there is
+# no pyproject, so shells verify never selects them.
+RUST_OWNED = ("berkit", "cardkit", "piv-card")
+# Where a project keeps rows besides its matrix file: glob patterns relative to the project directory. The
+# matrix file then holds only what spans the fragments. A project absent here has one matrix file.
+FRAGMENTS = {
+    "berkit": ("crates/berkit/roadmap/*.md",),
+    "cardkit": ("crates/*/ROADMAP.md",),
+}
+
+
+def matrix_files(root: pathlib.Path, project: str) -> list[pathlib.Path]:
+    """Every file holding the project's rows: the matrix file first, then its fragments in path order.
+
+    `matrix_path` stays the one file the single-file readers (status, query, board) use; for a project
+    with fragments they see only the rows that file holds.
+    """
+    found = []
+    primary = matrix_path(root, project)
+    if primary is not None:
+        found.append(primary)
+    folder = project_dir(root, project)
+    for pattern in FRAGMENTS.get(project, ()):
+        for path in sorted(folder.glob(pattern), key=lambda p: p.as_posix()):
+            if (
+                path.is_file()
+                and path not in found
+                and parse(path.read_text(encoding="utf-8")).rows
+            ):
+                found.append(path)
+    return found
+
+
+def _rel(path: pathlib.Path, folder: pathlib.Path) -> str:
+    try:
+        return path.relative_to(folder).as_posix()
+    except ValueError:
+        return path.name
+
+
+def scope_of(root: pathlib.Path, project: str, path: pathlib.Path) -> str:
+    """The id prefix for rows derived from `path`: `roadmap` for a file at the project's top level, else the
+    file's stem (`oid` for roadmap/oid.md), or its directory's name when the stem is ROADMAP (`apdu_core`
+    for crates/apdu-core/ROADMAP.md). A hyphen becomes `_`, since an id prefix cannot hold one."""
+    relative = pathlib.PurePosixPath(_rel(path, project_dir(root, project)))
+    if len(relative.parts) == 1:
+        return "roadmap"
+    stem = relative.stem if relative.stem.lower() != "roadmap" else relative.parent.name
+    return re.sub(r"[^a-z0-9_]", "_", stem.lower())
+
+
+def read_matrices(
+    root: pathlib.Path, project: str, files: list[pathlib.Path] | None = None
+) -> tuple[Matrix, str]:
+    """(rows and problems of every matrix file, their texts joined). One file reads as `parse` reads it.
+
+    Two files that derive the same scope are refused: their rows could collide on an id.
+    """
+    paths = matrix_files(root, project) if files is None else list(files)
+    folder = project_dir(root, project)
+    if len(paths) == 1:
+        text = paths[0].read_text(encoding="utf-8")
+        return parse(
+            text, scope_of(root, project, paths[0]), _rel(paths[0], folder)
+        ), text
+    rows: list[dict[str, str]] = []
+    problems: list[Problem] = []
+    texts: list[str] = []
+    scopes: dict[str, pathlib.Path] = {}
+    for path in paths:
+        scope = scope_of(root, project, path)
+        if scope in scopes:
+            raise ValueError(
+                f"{project}: {path} and {scopes[scope]} both derive the id scope {scope!r}"
+            )
+        scopes[scope] = path
+        text = path.read_text(encoding="utf-8")
+        found = parse(text, scope, _rel(path, folder))
+        rows += found.rows
+        problems += found.problems
+        texts.append(text)
+    return Matrix(rows, problems), "\n".join(texts)
 
 
 def ladder_for(root: pathlib.Path, project: str) -> dict[str, str]:

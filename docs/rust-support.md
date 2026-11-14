@@ -53,3 +53,48 @@ Sources: <https://doc.rust-lang.org/cargo/reference/manifest.html>,
 | (none) | `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings` |
 
 `projecthub shells verify --rust` exits 2, not 0, when cargo is missing or the path has no `Cargo.toml`.
+
+## How Rust ROADMAPs are read
+
+`projecthub sync` reads the obligation tables of berkit, cardkit and piv-card (`roadmap.RUST_OWNED`, part of the
+default project list). The grammar is the one in `db/parser.py`, with one more table shape:
+
+    | Status | Obligation | Anchor | Test |
+
+Status is the first column and there is no id column. Columns are found by header name. Only a table whose header
+starts with `Status` and has an `Obligation` column holds rows: berkit's policy table (`Status | Policy | Why`),
+the per-module summary tables and cardkit's assumption register (`Status | Ambiguity | ...`) are skipped.
+
+| Written | State | Issue label | Sync does |
+| --- | --- | --- | --- |
+| `[ok]` | done | `status:done` | closes the issue if one is open; files none |
+| `[unread]` | part | `status:partial` | opens or keeps an issue |
+| `[open]` | open | `status:unimplemented` | opens or keeps an issue |
+
+`[unread]` means the test passes but the anchor could not be read cleanly from the standard. That is unfinished
+work, so it is never done. The token is kept as written: an issue says `[unread]`, not a `[part]` the file never
+contained. The rule that a row is done only when a named test would fail if the behaviour regressed stays:
+an `[ok]` row whose Test cell is empty or begins `none` is reported as a problem (`--check` counts it as drift) and
+is not counted as a row. A table with no Test column can therefore hold only unfinished rows. The Test cell is
+shown in the issue as written; projecthub reads Python tests only, so it does not check that a Rust test exists
+and the issue says so.
+
+**Several files.** A project's rows may live in more than one file. `FRAGMENTS` names the globs: berkit keeps
+`crates/berkit/roadmap/*.md` and cardkit `crates/*/ROADMAP.md`, and the root file holds only the rows that span
+them. `roadmap.matrix_files` lists the root file and then the fragments in path order, and `read_matrices` parses
+them all. piv-card has one file (its `.private/ROADMAP.md` is not read). `matrix_path` is unchanged and still
+returns the one root file: the readers built on it (status, query, board, export) see only the rows that file
+holds for berkit and cardkit.
+
+**Ids.** There is no id cell, so an id is derived: `<scope>.<first six words>-<six hex digits of a hash of the
+first 80 normalised characters>`. The scope is `roadmap` for a file at the project's top level, otherwise the
+file's stem, or its directory name when the file is `ROADMAP.md`, with `-` written as `_` (`oid`,
+`apdu_core`). Two files that derive one scope are refused. Two rows in one file that agree on those 80
+characters get `-2`, `-3` in file order. Stability:
+
+- Reordering rows or files, inserting rows, and changing Status, Anchor or Test never change an id.
+- An edit to the first 80 normalised characters of the Obligation text renames the row. Sync then reports the
+  old issue as "no longer a row" and the new row as having no issue, loudly, and files a new issue on `--apply`
+  (the old one stays open until someone closes it, as with a renamed id in a Python project). A row number was
+  rejected because an inserted row would silently re-point every later issue at a different obligation.
+- An edit after those characters (a count, a date, a test name) changes nothing.
