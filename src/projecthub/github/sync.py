@@ -81,7 +81,10 @@ LABELS = {
     "type:non-goal": ("#c5def5", "row reads [no]; deliberate non-goal"),
 }
 # A read that returns exactly this many items may have been cut off, and is refused rather than trusted.
-ISSUE_LIMIT = 1000
+# gh paginates `issue list` itself up to --limit. 1000 was outgrown on 2026-11-14 when b1tninja-labs/portfolio
+# passed #1026 and every board and sync run refused; the guard below still refuses a list that reaches it.
+ISSUE_LIMIT = 10_000
+TITLE_MAX = 256  # GitHub's limit on an issue title
 # Every roadmap issue lives in one repository, so the portfolio is read in one place (PORTFOLIO.md decision 11).
 # A project's issues are the ones whose title starts with `[project]`. Set PROJECTHUB_ISSUE_REPO empty for the
 # old layout, one repository per project.
@@ -615,7 +618,17 @@ def issue_title(name: str, row: dict[str, str], summary: str) -> str:
     """`[pkix] anchors.load_anchor(): trust anchor selection`. The repository is in the title because a
     board row drawn from many repositories is otherwise anonymous."""
     tail = "" if is_rust(row) else summary or row["spec"]
-    return f"[{name}] {row['title']}: {tail}" if tail else f"[{name}] {row['title']}"
+    head = f"[{name}] {row['title']}"
+    if not tail:
+        return head
+    # GitHub refuses a title over 256 characters ("Title is too long"), which once left pkix's
+    # tests.asn1core_build with no issue at all. Only the tail is cut, so "[project] row" (what items are found
+    # by) survives whole, and the cut is deterministic, so a re-run compares equal and reports no drift.
+    full = f"{head}: {tail}"
+    if len(full) <= TITLE_MAX:
+        return full
+    room = TITLE_MAX - len(head) - len(": ") - len("…")
+    return f"{head}: {tail[: max(0, room)].rstrip()}…" if room > 0 else head[:TITLE_MAX]
 
 
 def same_text(a: str, b: str) -> bool:

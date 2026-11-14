@@ -61,7 +61,9 @@ OWNER = config.PROJECT_OWNER
 PORTFOLIO_REPO = config.PORTFOLIO_REPO
 # There is one board. Configured in config.py and PROJECTHUB_BOARD, never looked up by title.
 BOARD_NUMBER = int(paths.env("BOARD") or config.PROJECT_NUMBER)
-ISSUE_LIMIT = 1000
+# gh paginates `issue list` itself up to --limit. 1000 was outgrown on 2026-11-14 when b1tninja-labs/portfolio
+# passed #1026 and every board and sync run refused; the guard below still refuses a list that reaches it.
+ISSUE_LIMIT = 10_000
 
 STATUS = [
     (
