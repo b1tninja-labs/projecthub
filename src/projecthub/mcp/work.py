@@ -989,7 +989,9 @@ def build(  # type: ignore[no-untyped-def]
         # An injected `ready` decides alone; the default planner check activates the row's project on claim.
         if ready is not None:
             return ready(project, row_id)
-        return _ready_from_planner(project, row_id, activate=board.activate)
+        return _ready_from_planner(
+            project, row_id, activate=lambda p: board.activate(p, row_id)
+        )
 
     app = MCPServer(name="projecthub-work", instructions=INSTRUCTIONS)
     write = ToolAnnotations(
@@ -1317,7 +1319,9 @@ def _work(store: Store, argv: list[str]) -> int:
         if args.command == "acquire":
             claimant = claims_for(store)
             why = _ready_from_planner(
-                args.project, args.row_id, activate=claimant.activate
+                args.project,
+                args.row_id,
+                activate=lambda p: claimant.activate(p, args.row_id),
             )
             if why:
                 raise LeaseError("NOT_READY", why)

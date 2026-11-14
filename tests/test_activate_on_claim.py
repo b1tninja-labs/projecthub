@@ -116,3 +116,26 @@ def test_the_command_line_acquire_activates_then_claims(
     assert board.by_id["PVTI-trustatlas"].values["Active"] == "Active"
     claimed = board.by_id["PVTI-[trustatlas]-ta.suite_green"].values
     assert claimed["Status"] == "In progress"
+
+
+def test_a_row_missing_from_the_board_never_activates_its_project(store, clock):
+    board = fb.FakeBoard(card("trustatlas"))
+    with pytest.raises(L.LeaseError, match="NO_ITEM"):
+        fb.claimant(store, board, clock).activate("trustatlas", "ta.suite_green")
+    assert "Active" not in board.by_id["PVTI-trustatlas"].values and board.writes == []
+
+
+def test_a_row_that_is_not_claimable_never_activates_its_project(store, clock):
+    board = fb.FakeBoard(card("trustatlas"), fb.item(ROW, Status="Done"))
+    with pytest.raises(L.LeaseError, match="NOT_CLAIMABLE"):
+        fb.claimant(store, board, clock).activate("trustatlas", "ta.suite_green")
+    assert board.writes == []
+
+
+def test_a_claimable_row_activates_its_project(store, clock):
+    board = fb.FakeBoard(card("trustatlas"), fb.item(ROW, Status="Backlog"))
+    assert (
+        fb.claimant(store, board, clock).activate("trustatlas", "ta.suite_green")
+        is True
+    )
+    assert board.by_id["PVTI-trustatlas"].values["Active"] == "Active"

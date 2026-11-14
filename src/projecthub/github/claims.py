@@ -293,13 +293,21 @@ class ProjectClaims:
             and not (ended is not None and ended(str(i.values.get("Agent"))))
         ]
 
-    def activate(self, project: str) -> bool:
+    def activate(self, project: str, row_id: str = "") -> bool:
         """Mark `project`'s Project-level item Active, because a lease on one of its rows is the owner's
         decision that the project carries effort now. Returns True when this call wrote the field, False when
         it was Active already. Refuses NO_PROJECT_ITEM when the board has no single card for the project, and
-        ACTIVATE_FAILED when the write did not stand; nothing is claimed in either case."""
+        ACTIVATE_FAILED when the write did not stand; nothing is claimed in either case.
+
+        With `row_id`, the row's item is found and checked claimable on the cached board first (NO_ITEM,
+        AMBIGUOUS, LEASE_HELD, NOT_CLAIMABLE), so a claim that is bound to fail never activates its project:
+        rows not yet on the board once turned four projects Active with no lease to show for it."""
         if self.client is None:
             raise self._offline(self.offline_reason or "no GitHub client")
+        if row_id:
+            target = self.find(project, row_id)
+            if not claimable(target, self.clock()):
+                raise self._refusal(target)
         client = self.client
         items = self._guard(lambda: self.cache.items(client, self.owner, self.number))
         cards = [
