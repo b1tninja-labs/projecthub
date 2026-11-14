@@ -984,7 +984,13 @@ def build(  # type: ignore[no-untyped-def]
 
     leases = store or Store()
     board = claims or claims_for(leases)
-    check = ready or _ready_from_planner
+
+    def check(project: str, row_id: str) -> str:
+        # An injected `ready` decides alone; the default planner check activates the row's project on claim.
+        if ready is not None:
+            return ready(project, row_id)
+        return _ready_from_planner(project, row_id, activate=board.activate)
+
     app = MCPServer(name="projecthub-work", instructions=INSTRUCTIONS)
     write = ToolAnnotations(
         read_only_hint=False,
@@ -1010,8 +1016,9 @@ def build(  # type: ignore[no-untyped-def]
         description=(
             f"Claim a ready row on GitHub Project 1. TTL defaults to {DEFAULT_TTL}s and is capped at {MAX_TTL}s; "
             "heartbeat before it runs out. Writes Agent, Claimed, Status In progress and Claim expires, re-reads "
-            "the item, and returns a lease id only when the claim stood. Refuses NOT_READY (inactive project, plan "
-            "directory, unbuilt dependency, declared non-goal), LEASE_HELD (claimed by someone else, or lost the "
+            "the item, and returns a lease id only when the claim stood. A row whose only obstacle is an inactive "
+            "project marks that project Active first. Refuses NOT_READY (plan directory, unbuilt dependency, "
+            "declared non-goal), NO_PROJECT_ITEM / ACTIVATE_FAILED (the project could not be marked Active), LEASE_HELD (claimed by someone else, or lost the "
             "race), HOLDER_BUSY, OFFLINE (the Project cannot be reached; nothing is claimed) and RATE_BUDGET_LOW. "
             "scope_files is advisory: the files you expect to touch."
         ),
@@ -1185,19 +1192,42 @@ def build(  # type: ignore[no-untyped-def]
     return app
 
 
-def _ready_from_planner(project: str, row_id: str) -> str:
-    """Empty if the read server's next would list the row, else the reason it is held back."""
+def _ready_from_planner(
+    project: str, row_id: str, activate: Callable[[str], object] | None = None
+) -> str:
+    """Empty if the read server's next would list the row, else the reason it is held back.
+
+    With `activate`, a row held back only because its project is not Active is made ready by calling
+    `activate(project)`: taking a lease on a row is the owner's decision that its project carries effort now,
+    so the claim moves the project to Active instead of refusing. Every other reason (plan directory, unbuilt
+    dependency, not an open row) still refuses, and the project is then not activated."""
     from projecthub.mcp import read as planner
 
     try:
         active = planner.active_projects()
     except Exception as error:  # the board could not be read: refuse rather than guess
         return f"could not read Active from the board: {error}"
+
+    def listed(result: dict[str, object]) -> bool:
+        ready = result["ready"] if isinstance(result["ready"], list) else []
+        return any(r["row_id"] == row_id for r in ready)
+
     result = planner.ready_rows(active, project, limit=10_000)
-    ready = result["ready"] if isinstance(result["ready"], list) else []
-    skipped = result["skipped"] if isinstance(result["skipped"], dict) else {}
-    if any(r["row_id"] == row_id for r in ready):
+    if listed(result):
         return ""
+    if activate is not None and project not in active:
+        assumed = planner.ready_rows(active | {project}, project, limit=10_000)
+        if listed(assumed):
+            activate(project)
+            if len(active) >= 2:
+                print(
+                    f"note: {project} is now Active beside {', '.join(sorted(active))}; "
+                    "the portfolio rule is at most two",
+                    file=sys.stderr,
+                )
+            return ""
+        result = assumed
+    skipped = result["skipped"] if isinstance(result["skipped"], dict) else {}
     reasons = ", ".join(f"{k} ({v})" for k, v in skipped.items())
     return f"{project}:{row_id} is not ready" + (
         f": {reasons}" if reasons else ": not an open row of that project"
@@ -1285,10 +1315,13 @@ def _work(store: Store, argv: list[str]) -> int:
     try:
         got: object
         if args.command == "acquire":
-            why = _ready_from_planner(args.project, args.row_id)
+            claimant = claims_for(store)
+            why = _ready_from_planner(
+                args.project, args.row_id, activate=claimant.activate
+            )
             if why:
                 raise LeaseError("NOT_READY", why)
-            lease = claims_for(store).acquire(
+            lease = claimant.acquire(
                 args.project,
                 args.row_id,
                 args.holder,

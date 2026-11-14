@@ -285,7 +285,8 @@ def ready_rows(
 def active_projects(
     owner: str = config.PROJECT_OWNER, number: int = config.PROJECT_NUMBER
 ) -> set[str]:
-    """Projects the owner marked Active on the board. Read, never inferred: Active is the owner's call.
+    """Projects the owner marked Active on the board. Read, never inferred: Active is set by a person, or by a lease
+    on one of the project's rows (`ProjectClaims.activate`).
     Read through the board cache, so a claim right after a pickup does not read the whole Project again."""
     from projecthub.github.boardcache import BoardCache
     from projecthub.github.client import Projects

@@ -19,7 +19,8 @@ an open decision from PORTFOLIO.md section 9 that names it. Field values come fr
 PORTFOLIO.md, the shells' POSITION table and the disk.
 
 What it never does. It does not move Status forward: Ready, In progress, In review and Blocked are a
-person's or an agent's call, and Active (the two-project rule) is never written by code. It does not invent
+person's or an agent's call, and Active (the two-project rule) is never written by this sync: the only writer
+is a lease (`ProjectClaims.activate`), because claiming a row is the decision that its project carries effort. It does not invent
 dates, estimates or milestones. It deletes nothing.
 
 The board is chosen by number, never by title: two open boards once shared the title, and a lookup by

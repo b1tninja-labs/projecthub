@@ -93,12 +93,14 @@ EXTRA: dict[
         "PORTFOLIO.md s4 Tier 5, s7 wave 4",
     ),
     "trustatlas": (
-        "Plan",
+        # Reclassified Plan -> Tooling by the owner on 2026-11-14: stdlib-only fetchers under tools/ with a test
+        # suite and a pyproject, so its rows can be leased. The web app stays unbuilt (PLAN.md's gating rule).
+        "Tooling",
         0,
         0,
         "trustatlas",
         "the trust-anchor supply chain, mapped",
-        "PORTFOLIO.md s5: deliberately unbuilt, after certledger's store",
+        "owner 2026-11-14: Tooling (fetchers and joins); PORTFOLIO.md s5 still holds the site unbuilt",
     ),
     "registrata": (
         "Library",
