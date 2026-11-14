@@ -963,6 +963,36 @@ def board_client() -> tuple[object | None, str]:
     return Projects(), ""
 
 
+AUTODRAIN_LIMIT = 25
+
+
+def drain_now(store: Store, limit: int = AUTODRAIN_LIMIT) -> str:
+    """Send what the outbox holds right after a lease write, so the board follows the work without a person
+    remembering `projecthub drain`. Best effort and never fatal: the write has already landed locally, and an
+    entry that cannot be sent stays queued for the next write or a manual drain. Skipped when offline or when
+    PROJECTHUB_NO_AUTODRAIN is set. Returns a one-line summary, empty when nothing was attempted.
+
+    Why it exists: on 2026-11-14 nothing ran the drain, 24 writes sat in the outbox, and every released lease
+    still read as claimed on the board, so the next agent's acquire was refused until the claim expired."""
+    if paths.env("NO_AUTODRAIN"):
+        return ""
+    client, _why = board_client()
+    if client is None:
+        return ""
+    if not store.pending(1):
+        return ""
+    from projecthub.github import outbox
+
+    try:
+        report = outbox.drain(store, client, limit=limit)  # type: ignore[arg-type]
+    except Exception as error:  # noqa: BLE001 - the local write stands; the entry stays queued
+        return f"outbox: not drained ({error}); run `projecthub drain`"
+    if report.stopped:
+        return f"outbox: drain stopped ({report.stopped}); run `projecthub drain`"
+    left = len(store.pending(limit + 1))
+    return f"outbox: drained ({left} still queued)" if left else "outbox: drained"
+
+
 def claims_for(store: Store) -> ProjectClaims:
     """The Project-backed claimant for `store`, through the default client."""
     from projecthub.github.claims import ProjectClaims
@@ -1009,9 +1039,11 @@ def build(  # type: ignore[no-untyped-def]
 
     def guarded(call):  # type: ignore[no-untyped-def]
         try:
-            return call()
+            result = call()
         except LeaseError as error:
             raise ToolError(str(error)) from error
+        drain_now(leases)
+        return result
 
     @app.tool(
         name="claim",
@@ -1368,7 +1400,15 @@ def _work(store: Store, argv: list[str]) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(got if isinstance(got, str) else json.dumps(got, indent=2))
+    if args.command not in ("log", "outbox"):
+        _say_drained(store)
     return 0
+
+
+def _say_drained(store: Store) -> None:
+    summary = drain_now(store)
+    if summary:
+        print(summary, file=sys.stderr)
 
 
 def _finish(store: Store, argv: list[str]) -> int:
@@ -1399,6 +1439,7 @@ def _finish(store: Store, argv: list[str]) -> int:
     except LeaseError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    _say_drained(store)
     return 0
 
 
