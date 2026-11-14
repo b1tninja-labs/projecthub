@@ -191,6 +191,36 @@ EXTRA: dict[
         "PORTFOLIO.md s9 item 15 (registration)",
         ("pkgformats",),
     ),
+    # Rust crates registered 2026-11-13 (PORTFOLIO.md s3, s4): untiered, unsequenced, outside the two-project rule.
+    # They are Cargo workspaces, not generated shells, so they are laid out by hand here like the support libraries.
+    "berkit": (
+        "Library",
+        0,
+        0,
+        "berkit",
+        "ASN.1 BER and DER in Rust (no_std, no allocation) built from ITU-T X.690 and X.680, with a language-neutral conformance corpus",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        (),
+    ),
+    "cardkit": (
+        "Library",
+        0,
+        0,
+        "cardkit",
+        "six no_std crates under a USB smart-card reader: USB descriptors, CCID, APDU framing and exchange, the PIV model (USB CCID 1.1, NIST SP 800-73-5, ISO/IEC 7816)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        (),
+    ),
+    "piv-card": (
+        "Tooling",
+        0,
+        0,
+        "piv-card",
+        "PC/SC and PIV card access with a read-only piv-inventory CLI",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        # path dependencies: cardkit's apdu-core, apdu-exchange and piv-model, and berkit
+        ("cardkit", "berkit"),
+    ),
     "primarysource": (
         "Reference",
         0,

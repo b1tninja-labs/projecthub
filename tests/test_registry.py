@@ -172,3 +172,15 @@ def test_round_4_support_libraries_carry_their_edges():
             0,
             name,
         )
+
+
+def test_rust_crates_are_registered_with_their_path_dependencies():
+    """PORTFOLIO.md sections 3 and 4 (2026-11-13): berkit and cardkit depend on nothing; piv-card depends on
+    cardkit and berkit by path."""
+    entries = {e.name: e for e in p.entries()}
+    assert entries["berkit"].depends == ()
+    assert entries["cardkit"].depends == ()
+    assert entries["piv-card"].depends == ("cardkit", "berkit")
+    for name in ("berkit", "cardkit", "piv-card"):
+        entry = entries[name]
+        assert (entry.tier, entry.wave, entry.directory) == (0, 0, name)
