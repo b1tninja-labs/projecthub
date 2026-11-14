@@ -152,6 +152,8 @@ def test_extra_entries_carry_their_dependencies_into_the_graph():
         "distbuild",
         "attestkit",
         "advisoryformats",
+        "idnawire",
+        "tufverify",
     ):
         assert name in by_name, name
 
@@ -184,3 +186,21 @@ def test_rust_crates_are_registered_with_their_path_dependencies():
     for name in ("berkit", "cardkit", "piv-card"):
         entry = entries[name]
         assert (entry.tier, entry.wave, entry.directory) == (0, 0, name)
+
+
+def test_round_8_support_libraries_are_registered_with_their_edges():
+    """PORTFOLIO.md section 4: idnawire has no dependency (standard library only); tufverify depends on
+    sigwire. The consumer edges (pkix and registrata to idnawire, attestkit to tufverify) are added when the
+    consumer declares the dependency, so none is asserted here."""
+    entries = {e.name: e for e in p.entries()}
+    assert entries["idnawire"].depends == ()
+    assert entries["tufverify"].depends == ("sigwire",)
+    for name, phrase in (("idnawire", "IDNA 2008"), ("tufverify", "TUF client")):
+        entry = entries[name]
+        assert (entry.kind, entry.tier, entry.wave, entry.directory) == (
+            "Library",
+            0,
+            0,
+            name,
+        )
+        assert phrase in entry.what

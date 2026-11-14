@@ -182,6 +182,27 @@ EXTRA: dict[
         # pkgformats.vocab for purl and versions; devicespy.xmlsafe for GLSA
         ("pkgformats", "devicespy"),
     ),
+    # Support libraries scaffolded in round 8 (2026-11-13) and registered in round 9, laid out by hand like attestkit.
+    "idnawire": (
+        "Library",
+        0,
+        0,
+        "idnawire",
+        "IDNA 2008 (RFC 5890 to 5893, Punycode RFC 3492): U-label and A-label conversion, the RFC 5892 derived property from unicodedata, contextual and bidi rules, hostile-input limits",
+        "PORTFOLIO.md s4 support libraries (idnawire); s9 item 15",
+        # standard library only; pkix (names.idn_email) and registrata (hosts.registrable-idna2008) add the edge when they import it
+        (),
+    ),
+    "tufverify": (
+        "Library",
+        0,
+        0,
+        "tufverify",
+        "a sans-IO TUF client (specification 1.0.37): root chain, timestamp, snapshot and targets verification with thresholds, rotation and delegations; no network, clock or file code",
+        "PORTFOLIO.md s4 support libraries (tufverify); s9 item 15",
+        # sigwire[verify] for ed25519, RSASSA-PSS and ECDSA P-256; attestkit will consume it for the Sigstore trusted root
+        ("sigwire",),
+    ),
     "distbuild": (
         "Tooling",
         0,
