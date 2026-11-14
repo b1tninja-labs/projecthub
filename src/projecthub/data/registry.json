@@ -54,7 +54,8 @@
       2,
       2,
       [
-        "asn1core"
+        "asn1core",
+        "idnawire"
       ]
     ],
     "revokekit": [
@@ -161,7 +162,8 @@
       3,
       2,
       [
-        "asn1core"
+        "asn1core",
+        "pkix"
       ]
     ],
     "ntspy": [

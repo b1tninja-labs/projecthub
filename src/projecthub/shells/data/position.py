@@ -13,7 +13,7 @@ POSITION = {
     "rpkit": (1, 1, ("asn1core", "pkix", "signeddata", "sigwire")),
     # Tier 2, wave 2: the certificate cluster.
     "ctspy": (2, 2, ("asn1core",)),
-    "pkix": (2, 2, ("asn1core",)),
+    "pkix": (2, 2, ("asn1core", "idnawire")),
     "revokekit": (2, 2, ("asn1core", "pkix")),
     # Tier 2, wave 2: the routing-security cluster, anchored on rpkit.
     "rtrkit": (2, 2, ("rpkit",)),
@@ -36,7 +36,7 @@ POSITION = {
     "sfields": (3, 5, ()),
     "syslogkit": (3, 5, ()),
     # Tier 3, wave 2: certificate-shaped, so gated on the substrate.
-    "signeddata": (3, 2, ("asn1core",)),
+    "signeddata": (3, 2, ("asn1core", "pkix")),
     # Tier 4, wave 5: the rest, in tier order, one at a time.
     "ntspy": (4, 5, ()),
     "tacacs": (4, 5, ()),
@@ -202,6 +202,15 @@ DEPENDS_WHY = {
     ("shaken", "pkix"): "a SHAKEN certificate is accepted only once it validates to a "
     "trust anchor, which is pkix's path validation, and its extensions are "
     "decoded there too",
+    # Edges added in round 10 (2026-11-13), each declared by the consumer's pyproject.
+    (
+        "pkix",
+        "idnawire",
+    ): "RFC 9598 section 5 requires email domains to be put in A-label "
+    "form before they are compared, and IDNA 2008 conversion has one home in the "
+    "portfolio, idnawire",
+    ("signeddata", "pkix"): "a SignedData signer's certificate chain is validated by "
+    "pkix, which signeddata's verify and chain extras compose rather than rewrite",
     ("cwmp", "devicespy"): "both parse XML written by a stranger, and the one hardened "
     "XML reader (xmlsafe) lives in devicespy, which cwmp uses by sibling path",
 }

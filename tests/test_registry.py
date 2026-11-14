@@ -162,7 +162,15 @@ def test_round_4_support_libraries_carry_their_edges():
     """PORTFOLIO.md section 9 item 15: pkgtrust -> attestkit -> pkgformats.vocab and sigwire[verify];
     advisoryformats -> pkgformats and devicespy; pkgtrust -> advisoryformats. sigwire never imports attestkit."""
     deps = {e.name: set(e.depends) for e in p.entries()}
-    assert deps["attestkit"] == {"pkgformats", "sigwire"}
+    # the `sigstore` extra's asn1core, pkix and signeddata are declared too (round 10); tufverify is not yet
+    assert deps["attestkit"] == {
+        "pkgformats",
+        "sigwire",
+        "asn1core",
+        "pkix",
+        "signeddata",
+    }
+    assert "tufverify" not in deps["attestkit"]
     assert deps["advisoryformats"] == {"pkgformats", "devicespy"}
     assert {"attestkit", "advisoryformats"} <= deps["pkgtrust"]
     assert "attestkit" not in deps["sigwire"]
@@ -190,8 +198,8 @@ def test_rust_crates_are_registered_with_their_path_dependencies():
 
 def test_round_8_support_libraries_are_registered_with_their_edges():
     """PORTFOLIO.md section 4: idnawire has no dependency (standard library only); tufverify depends on
-    sigwire. The consumer edges (pkix and registrata to idnawire, attestkit to tufverify) are added when the
-    consumer declares the dependency, so none is asserted here."""
+    sigwire. The consumer edges are added when the consumer declares the dependency: see the round 10 test below
+    (attestkit to tufverify is still absent, because attestkit's pyproject does not declare it)."""
     entries = {e.name: e for e in p.entries()}
     assert entries["idnawire"].depends == ()
     assert entries["tufverify"].depends == ("sigwire",)
@@ -204,3 +212,31 @@ def test_round_8_support_libraries_are_registered_with_their_edges():
             name,
         )
         assert phrase in entry.what
+
+
+def test_round_10_edges_follow_the_pyprojects_that_declare_them():
+    """pkix and registrata declare idnawire; certledger declares pkix (for cl.dane-topmost-signed-by) and
+    asn1core; signeddata declares pkix in its extras; tlswire reaches pkix, sigwire, asn1core and idnawire
+    through its `verify` extra; quicmux imports no sibling."""
+    entries = {e.name: e for e in p.entries()}
+    assert "idnawire" in entries["pkix"].depends
+    assert entries["registrata"].depends == ("idnawire",)
+    assert {"asn1core", "pkix"} <= set(entries["certledger"].depends)
+    assert "pkix" in entries["signeddata"].depends
+    assert set(entries["tlswire"].depends) == {
+        "pkix",
+        "sigwire",
+        "asn1core",
+        "idnawire",
+    }
+    assert entries["quicmux"].depends == ()
+    for name in ("tlswire", "quicmux"):
+        entry = entries[name]
+        assert (entry.kind, entry.tier, entry.wave, entry.directory) == (
+            "Library",
+            0,
+            0,
+            name,
+        )
+    assert "TLS 1.3" in entries["tlswire"].what
+    assert "QUIC" in entries["quicmux"].what

@@ -45,6 +45,7 @@ def test_a_plan_only_dependency_names_its_plan_file(workspace):
 
 def test_a_dependency_with_code_is_no_longer_called_missing_or_blocked(workspace):
     make_code(workspace, "asn1core")
+    make_code(workspace, "idnawire")  # pkix declares it too (round 10)
     text = " ".join(generate.render_plan({"name": "pkix"}).split())
     assert "does not exist yet" not in text
     assert "Blocked, not in progress" not in text

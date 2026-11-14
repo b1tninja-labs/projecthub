@@ -64,6 +64,8 @@ EXTRA: dict[
         "certledger",
         "independent CT acquisition and publication",
         "PORTFOLIO.md s4 Tier 1, s7 wave 1",
+        # pkix for cl.dane-topmost-signed-by (RFC 7671 s5.2.3 para 10); asn1core for I3
+        ("asn1core", "pkix"),
     ),
     "namespy": (
         "Library",
@@ -104,6 +106,8 @@ EXTRA: dict[
         "pyrwhois",
         "registration data: an RFC 2167 RWhois client and server, plus experimental WHOIS and RDAP behind one lookup model",
         "PORTFOLIO.md s3 (implemented, not yet sequenced into a tier)",
+        # idnawire for hosts.registrable-idna2008 (its only runtime dependency)
+        ("idnawire",),
     ),
     # Support libraries, created 2026-11-13 under PORTFOLIO.md s9 item 14 and s2's self-sufficiency principle:
     # untiered, unsequenced, outside the two-project rule. `sigprim` merged into `sigwire[verify]` (item 15).
@@ -169,8 +173,10 @@ EXTRA: dict[
         "attestkit",
         "SBOM and attestation documents: a neutral BOM model, CycloneDX 1.7 and SPDX 3.0.1 readers and writers, SPDX 2.3, in-toto Statements, SLSA provenance",
         "PORTFOLIO.md s9 item 15 (SBOMs and attestations); support library",
-        # pkgformats.vocab for purl; sigwire's DSSE parse layer, and sigwire[verify] for the verify extra
-        ("pkgformats", "sigwire"),
+        # pkgformats.vocab for purl; sigwire's DSSE parse layer, and sigwire[verify] for the verify extra; the
+        # `sigstore` extra adds asn1core, pkix and signeddata (ctspy too, not carried here). It does not declare
+        # tufverify yet: add that edge when its pyproject does.
+        ("pkgformats", "sigwire", "asn1core", "pkix", "signeddata"),
     ),
     "advisoryformats": (
         "Library",
@@ -190,7 +196,8 @@ EXTRA: dict[
         "idnawire",
         "IDNA 2008 (RFC 5890 to 5893, Punycode RFC 3492): U-label and A-label conversion, the RFC 5892 derived property from unicodedata, contextual and bidi rules, hostile-input limits",
         "PORTFOLIO.md s4 support libraries (idnawire); s9 item 15",
-        # standard library only; pkix (names.idn_email) and registrata (hosts.registrable-idna2008) add the edge when they import it
+        # standard library only; pkix (names.idn_email) and registrata (hosts.registrable-idna2008) import it, and
+        # carry the edge
         (),
     ),
     "tufverify": (
@@ -202,6 +209,26 @@ EXTRA: dict[
         "PORTFOLIO.md s4 support libraries (tufverify); s9 item 15",
         # sigwire[verify] for ed25519, RSASSA-PSS and ECDSA P-256; attestkit will consume it for the Sigstore trusted root
         ("sigwire",),
+    ),
+    "tlswire": (
+        "Library",
+        0,
+        0,
+        "tlswire",
+        "a sans-IO TLS 1.3 client handshake engine for QUIC (RFC 9846, which replaced RFC 8446): handshake messages in and out with no record layer, key schedule, exporter; AES-GCM and ChaCha20-Poly1305, x25519 and secp256r1 through `cryptography` primitives only; trust is decided by the caller's authenticator, never the engine",
+        "PORTFOLIO.md s4 support libraries (tlswire); s9 item 15",
+        # optional, through tlswire.authenticators (the `verify` extra): pkix, sigwire[verify], asn1core, idnawire
+        ("pkix", "sigwire", "asn1core", "idnawire"),
+    ),
+    "quicmux": (
+        "Library",
+        0,
+        0,
+        "quicmux",
+        "sans-IO QUIC building blocks, client first: variable-length integers, the RFC 9000 packet and frame codecs, RFC 9001 packet and header protection (versions 1 and 2), the Retry integrity tag and version negotiation",
+        "PORTFOLIO.md s9 item 15 (QUIC); tlswire's planned consumer; no s4 row yet",
+        # imports no sibling; tlswire is integration-tested only, skipped if absent
+        (),
     ),
     "distbuild": (
         "Tooling",
