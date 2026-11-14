@@ -247,7 +247,7 @@ EXTRA: dict[
         0,
         "berkit",
         "ASN.1 BER and DER in Rust (no_std, no allocation) built from ITU-T X.690 and X.680, with a language-neutral conformance corpus",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/berkit; not on crates.io)",
         (),
     ),
     "cardkit": (
@@ -256,7 +256,7 @@ EXTRA: dict[
         0,
         "cardkit",
         "six no_std crates under a USB smart-card reader: USB descriptors, CCID, APDU framing and exchange, the PIV model (USB CCID 1.1, NIST SP 800-73-5, ISO/IEC 7816)",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/cardkit; not on crates.io)",
         (),
     ),
     "piv-card": (
@@ -265,7 +265,7 @@ EXTRA: dict[
         0,
         "piv-card",
         "PC/SC and PIV card access with a read-only piv-inventory CLI",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/piv-card; not on crates.io)",
         # path dependencies: cardkit's apdu-core, apdu-exchange and piv-model, and berkit
         ("cardkit", "berkit"),
     ),
