@@ -117,7 +117,7 @@ def test_head_tests_on_base_fail_then_pass_on_head_is_accepted(repo):
     assert record["ok"] is True
 
 
-def test_a_test_that_already_passes_on_base_is_rejected_when_the_commit_changes_source(
+def test_a_test_that_already_passes_on_base_stands_on_l4_even_when_the_commit_changes_source(
     repo,
 ):
     root, base = repo
@@ -128,8 +128,13 @@ def test_a_test_that_already_passes_on_base_is_rejected_when_the_commit_changes_
         source=REAL + "\n# touched\n",
     )
     (row,) = E.check(root, "demo", base_ref="HEAD~1")["rows"]
-    assert row["ok"] is False
-    assert "already passes on base" in row["reason"]
+    assert row["l3"]["pre_existing"] is True and row["l3"]["changes_source"] is True
+    assert row["l4"]["ok"] is True and row["ok"] is True, row
+    (off,) = E.check(root, "demo", base_ref="HEAD~1", mutate=False)["rows"]
+    assert (
+        off["ok"] is False
+        and "already passes on base" in off["l3"]["tried"][0]["reason"]
+    )
 
 
 def test_behaviour_that_predates_the_commit_passes_only_through_l4(repo):

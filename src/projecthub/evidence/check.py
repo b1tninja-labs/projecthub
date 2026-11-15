@@ -430,10 +430,11 @@ def audit_row(
         )
         if ok:
             break
+    # Every cited test already passes on base. Whether or not the commit also touches source (a row's Where cell
+    # fixed alongside code, a merge), no differential can tell this test from one written for nothing, so the
+    # owner's ruling applies: L4 must show the test kills a mutant of the row's function.
     pre_existing = (
-        not ok
-        and all(t["reason"] == ALREADY_PASSES for t in tried)
-        and not any(_is_source(p) for p in changed)
+        not ok and bool(tried) and all(t["reason"] == ALREADY_PASSES for t in tried)
     )
     # New code (the owner's ruling of 2026-11-15): the test cannot even import it on base, so no differential
     # can fail behaviourally there. It passes on head, and L4 below must show it kills a mutant of the function.
@@ -454,12 +455,13 @@ def audit_row(
             "tried": tried,
         }
     elif pre_existing:
-        # Every cited test passes on base and the commit changes no source: the behaviour was already there
-        # (pkix's chain.issuer_binding). A differential cannot show that, so L4 below becomes mandatory.
+        # The behaviour was already there (pkix's chain.issuer_binding). A differential cannot show that, so L4
+        # below becomes mandatory.
         out.l3 = {
             "ok": True,
             "pre_existing": True,
-            "reason": "the behaviour predates this commit (it changes no source); L4 must prove the test",
+            "changes_source": any(_is_source(p) for p in changed),
+            "reason": "every cited test already passes on base; L4 must prove the test",
             "tried": tried,
         }
     else:
