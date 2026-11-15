@@ -70,7 +70,8 @@ CREATE INDEX IF NOT EXISTS verdicts_row ON verdicts(row_key, finished_at);
 """
 
 # (repo, project, base, head, row, timeout) -> the check's record
-Checker = Callable[[pathlib.Path, str, str, str, str, float], dict[str, Any]]
+# (repo, project, base, head, row, timeout[, siblings]) -> the check's record
+Checker = Callable[..., dict[str, Any]]
 
 
 class Refused(Exception):
@@ -292,8 +293,11 @@ def locate(
 CHILD = """
 import json, pathlib, sys
 from projecthub.evidence import check
-repo, project, base, head, row, out = sys.argv[1:]
-record = check.check(pathlib.Path(repo), project, base, head, [row], mutate=True)
+repo, project, base, head, row, out, siblings = sys.argv[1:]
+record = check.check(
+    pathlib.Path(repo), project, base, head, [row], mutate=True,
+    siblings=[pathlib.Path(s) for s in json.loads(siblings)],
+)
 pathlib.Path(out).write_text(json.dumps(record), encoding="utf-8")
 """
 
@@ -316,8 +320,27 @@ def _kill_tree(process: subprocess.Popen[str]) -> None:
     process.kill()
 
 
+def sibling_checkouts(root: pathlib.Path, project: str) -> list[pathlib.Path]:
+    """The checkouts of the projects `project` depends on (the registry's edges), where they are git trees.
+    The check extracts each beside the tree under test, so a test that reaches a sibling by relative path runs
+    in the sandbox as it does on disk (trustatlas's host_reach skipped without asn1core and failed L3)."""
+    entry = next((e for e in registry.entries() if e.name == project), None)
+    out = []
+    for dep in entry.depends if entry else ():
+        path = project_checkout(root, dep)
+        if path.is_dir() and _git(path, "rev-parse", "--git-dir").returncode == 0:
+            out.append(path)
+    return out
+
+
 def check_in_child(
-    repo: pathlib.Path, project: str, base: str, head: str, row: str, timeout: float
+    repo: pathlib.Path,
+    project: str,
+    base: str,
+    head: str,
+    row: str,
+    timeout: float,
+    siblings: Sequence[pathlib.Path] = (),
 ) -> dict[str, Any]:
     """`check.check` for one row with mutation on, in a child process: a crash or a hang cannot take the
     worker with it. Raises TimeoutError past `timeout` seconds and RuntimeError when the child fails."""
@@ -347,6 +370,7 @@ def check_in_child(
                 head,
                 row,
                 str(out),
+                json.dumps([str(s) for s in siblings]),
             ],
             cwd=tmp,
             env=env,
@@ -420,7 +444,12 @@ def handle(
         repo, project, row, verdict.sha, verdict.base = locate(
             root, verdict.row_key, verdict.sha, branch
         )
-        record = checker(repo, project, verdict.base, verdict.sha, row, timeout)
+        siblings = sibling_checkouts(root, project)
+        record = (
+            checker(repo, project, verdict.base, verdict.sha, row, timeout, siblings)
+            if siblings
+            else checker(repo, project, verdict.base, verdict.sha, row, timeout)
+        )
         judge(verdict, record, project, row)
     except Refused as refused:
         verdict.ok, verdict.reasons = False, [str(refused)]

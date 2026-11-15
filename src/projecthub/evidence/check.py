@@ -31,6 +31,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tarfile
@@ -39,6 +40,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from projecthub.db import parser as roadmap
 
@@ -46,6 +48,11 @@ SCHEMA = "sdk-forge/roadmap-evidence/1"
 ASSERTING_CALLS = {"raises", "warns", "fail", "deprecated_call"}
 # A failure whose exception is one of these says the code under test is absent, not that it misbehaves.
 NOT_BEHAVIOURAL = ("ImportError", "ModuleNotFoundError")
+ALREADY_PASSES = "the named test already passes on base: it does not detect this change"
+# How many of a row's cited tests L3 tries before giving up; each costs two pytest runs.
+MAX_CANDIDATES = 6
+# `module.function` or `module.function()` in a Where cell: an L4 target for a row whose id is a concept.
+FUNCTION_SPAN = re.compile(r"`([a-z_]\w*\.[a-z_]\w*)(?:\(\))?`")
 
 
 # ---------------------------------------------------------------------------------------------- L1
@@ -307,7 +314,7 @@ def differential(
     if on_base.outcome == "passed":
         return False, {
             **detail,
-            "reason": "the named test already passes on base: it does not detect this change",
+            "reason": ALREADY_PASSES,
         }
     if on_base.outcome != "failed":
         return False, {
@@ -367,6 +374,7 @@ def audit_row(
     scratch: pathlib.Path,
     runner: Callable[..., Run] = run_node,
     mutate: bool = True,
+    changed: Sequence[str] = (),
 ) -> Audit:
     out = Audit(f"{project}:{row['name']}", row["title"])
     node, state = roadmap.named_test(heads, project, row["where"], row["evidence"])
@@ -384,24 +392,75 @@ def audit_row(
     if not ok:
         out.reason = f"L1: {why}"
         return out
-    ok, detail = differential(
-        head, roadmap.project_dir(bases, project), node, scratch, runner
+    base_dir = roadmap.project_dir(bases, project)
+    # L3 tries the named test first, then every other test the row cites that exists: a row that keeps one
+    # named test while each change adds its own (trustatlas's ta.join_programs) is proved by the new test.
+    candidates = [node] + [
+        n
+        for n in roadmap.cited_tests(heads, project, row["where"], row["evidence"])
+        if n != node
+    ][: MAX_CANDIDATES - 1]
+    tried: list[dict[str, object]] = []
+    ok, detail = False, dict[str, object]()
+    for candidate in candidates:
+        ok, detail = differential(head, base_dir, candidate, scratch, runner)
+        tried.append({"node": candidate, "ok": ok, "reason": detail["reason"]})
+        if ok:
+            break
+    pre_existing = (
+        not ok
+        and all(t["reason"] == ALREADY_PASSES for t in tried)
+        and not any(_is_source(p) for p in changed)
     )
-    out.l3 = {"ok": ok, **detail}
-    out.ok = ok
-    out.reason = "" if ok else f"L3: {detail['reason']}"
-    if not ok or not mutate:
+    if ok:
+        out.l3 = {"ok": True, **detail, "proved_by": tried[-1]["node"], "tried": tried}
+    elif pre_existing:
+        # Every cited test passes on base and the commit changes no source: the behaviour was already there
+        # (pkix's chain.issuer_binding). A differential cannot show that, so L4 below becomes mandatory.
+        out.l3 = {
+            "ok": True,
+            "pre_existing": True,
+            "reason": "the behaviour predates this commit (it changes no source); L4 must prove the test",
+            "tried": tried,
+        }
+    else:
+        out.l3 = {"ok": False, **detail, "tried": tried}
+        out.reason = f"L3: {tried[0]['reason']}" if tried else "L3: no test ran"
+        return out
+    out.ok = True
+    if not mutate:
+        if pre_existing:
+            out.ok = False
+            out.reason = "L4 is off, and only L4 can prove a test for behaviour that predates the commit"
         return out
     from projecthub.evidence import mutate as M
 
-    target = M.locate(head, row["name"])
+    target = _target(M, head, row["name"]) or next(
+        (
+            found
+            for found in (
+                _target(M, head, s) for s in FUNCTION_SPAN.findall(row["where"])
+            )
+            if found is not None
+        ),
+        None,
+    )
     if target is None:
+        # A concept row (chain.ca_constraints) names no module.function. L1 and a real differential stand on
+        # their own; a pre-existing behaviour has only L4 to prove its test, so it cannot pass without one.
         out.l4 = {
-            "ok": False,
-            "error": f"{row['name']} names no module.function in the package",
+            "ok": None,
+            "skipped": f"{row['name']} names no module.function to mutate",
         }
-    else:
-        out.l4 = M.audit(head, target[0], target[1], [node], scratch)
+        if pre_existing:
+            out.ok = False
+            out.reason = (
+                "L4: the behaviour predates this commit and the row names no function to mutate, "
+                "so nothing shows the test would catch a regression"
+            )
+        return out
+    proving = [str(out.l3.get("proved_by") or node)]
+    out.l4 = M.audit(head, target[0], target[1], proving, scratch)
     out.ok = bool(out.l4["ok"])
     if not out.ok:
         out.reason = "L4: " + (
@@ -410,6 +469,35 @@ def audit_row(
             else str(out.l4["error"])
         )
     return out
+
+
+def _target(M: Any, head: pathlib.Path, name: str) -> tuple[str, str] | None:
+    """`mutate.locate`, kept only when the module really defines the function: `chain.ca_constraints` finds
+    pkix's chain.py, which has no such function, and L4 then failed a concept row instead of skipping it."""
+    found = M.locate(head, name)
+    if found is None:
+        return None
+    module, function = found
+    try:
+        tree = ast.parse((head / module).read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return None
+    defined = {
+        n.name
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    return found if function in defined else None
+
+
+def _is_source(path: str) -> bool:
+    """A changed path that is code under test, not a test, a document or the roadmap itself."""
+    pure = pathlib.PurePosixPath(path)
+    return (
+        pure.suffix == ".py"
+        and "tests" not in pure.parts
+        and not pure.name.startswith(("test_", "conftest"))
+    )
 
 
 def check(
@@ -421,8 +509,13 @@ def check(
     package: str = "",
     runner: Callable[..., Run] = run_node,
     mutate: bool = True,
+    siblings: Sequence[pathlib.Path] = (),
 ) -> dict[str, object]:
-    """The roadmap-evidence record for `repo` between two commits. `mutate` adds L4 (mutate.py)."""
+    """The roadmap-evidence record for `repo` between two commits. `mutate` adds L4 (mutate.py).
+
+    `siblings` are checkouts of the projects this one depends on. Each is extracted at its own HEAD beside the
+    tree under test, on both sides, so a test that finds a sibling by relative path (trustatlas reaching
+    `../asn1core`) runs instead of skipping, and a skip still fails L3 as it should."""
     base_sha, head_sha = resolve(repo, base_ref), resolve(repo, head_ref)
     folder = roadmap.DIRECTORIES.get(project, project)
     with tempfile.TemporaryDirectory(prefix="roadmap-evidence-") as tmp:
@@ -430,6 +523,17 @@ def check(
         heads, bases = scratch / "head", scratch / "base"
         extract(repo, head_sha, heads / folder)
         extract(repo, base_sha, bases / folder)
+        for sibling in siblings:
+            sha = resolve(sibling, "HEAD")
+            for side in (heads, bases):
+                if not (side / sibling.name).exists():
+                    extract(sibling, sha, side / sibling.name)
+        diff = git(repo, "diff", "--name-only", base_sha, head_sha)
+        changed = (
+            diff.stdout.decode(errors="replace").split()
+            if diff.returncode == 0
+            else ["?"]
+        )
         after, before = matrix_rows(heads, project), matrix_rows(bases, project)
         wanted = list(rows) or flipped(before, after)
         unknown = [r for r in wanted if r not in after]
@@ -450,7 +554,9 @@ def check(
             []
             if isolation
             else [
-                audit_row(after[r], project, heads, bases, scratch, runner, mutate)
+                audit_row(
+                    after[r], project, heads, bases, scratch, runner, mutate, changed
+                )
                 for r in wanted
             ]
         )

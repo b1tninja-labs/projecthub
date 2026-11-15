@@ -101,6 +101,9 @@ EXTRA: dict[
         "trustatlas",
         "the trust-anchor supply chain, mapped",
         "owner 2026-11-14: Tooling (fetchers and joins); PORTFOLIO.md s5 still holds the site unbuilt",
+        # asn1core, called by path (check_spki_artifact.py, host_reach.py), never imported: an edge all the same,
+        # and the one the evidence sandbox needs to extract beside trustatlas.
+        ("asn1core",),
     ),
     "registrata": (
         "Library",

@@ -704,6 +704,50 @@ def _marked(cell: str, end: int) -> bool:
     return TO_BE_WRITTEN in window
 
 
+TEST_LABEL = re.compile(r"\bTests?:\s*`?$", re.IGNORECASE)
+
+
+def _labelled(cell: str, start: int) -> bool:
+    """Is the reference starting at `start` introduced by a `Test:` label?"""
+    return bool(TEST_LABEL.search(cell[max(0, start - 16) : start]))
+
+
+def cited_tests(
+    root: pathlib.Path, project: str, where: str, evidence_cell: str = ""
+) -> list[str]:
+    """Every node id the row cites that exists in this project, labelled ones first, without duplicates.
+    References marked `(to be written)` and ones that resolve to nothing are left out."""
+    folder = project_dir(root, project)
+    out: list[str] = []
+    for cell in (where, evidence_cell):
+        refs = sorted(
+            TEST_REF.finditer(cell), key=lambda m: not _labelled(cell, m.start())
+        )
+        for found in refs:
+            relative, parts = found.group(1), found.group(2).split("::")[1:]
+            if _marked(cell, found.end()) or not (folder / relative).is_file():
+                continue
+            tree = _parse_file(folder / relative)
+            if tree is not None and not _defines(tree, parts):
+                node = f"{relative}::{'::'.join(parts)}"
+                if node not in out:
+                    out.append(node)
+        tests = folder / "tests"
+        files = sorted(tests.rglob("test*.py")) if tests.is_dir() else []
+        for found in BARE_TEST.finditer(cell):
+            name = found.group(1)
+            if _marked(cell, found.end()):
+                continue
+            for path in files:
+                tree = _parse_file(path)
+                if tree is not None and not _defines(tree, [name]):
+                    node = f"{path.relative_to(folder).as_posix()}::{name}"
+                    if node not in out:
+                        out.append(node)
+                    break
+    return out
+
+
 def named_test(
     root: pathlib.Path, project: str, where: str, evidence_cell: str = ""
 ) -> tuple[str, str]:
@@ -712,10 +756,17 @@ def named_test(
     The node comes from Where when Where names one, and from Evidence when Where names a module instead:
     certledger's cl.multi-path reads `certledger/fanout.py` (planned) in Where and carries its test in
     Evidence, and reporting the module as the "named test" told an agent to run a file that is not a test.
+
+    A reference labelled `Test:` wins over one that merely appears earlier in the cell: trustatlas's
+    ta.spki_key_identity cites asn1core's own test before its `Test:`, and the evidence check went looking for
+    asn1core's file inside trustatlas and reported the row's test missing.
     """
     folder = project_dir(root, project)
     for cell in (where, evidence_cell):
-        for found in TEST_REF.finditer(cell):
+        refs = sorted(
+            TEST_REF.finditer(cell), key=lambda m: not _labelled(cell, m.start())
+        )
+        for found in refs:
             relative, parts = found.group(1), found.group(2).split("::")[1:]
             node = f"{relative}::{'::'.join(parts)}"
             if _marked(cell, found.end()):
