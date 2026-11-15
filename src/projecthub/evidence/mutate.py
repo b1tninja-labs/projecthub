@@ -379,12 +379,17 @@ def audit(
 
 
 def locate(folder: pathlib.Path, row_name: str) -> tuple[str, str] | None:
-    """(module path, function) a row id names: `merkle.verify_inclusion` -> (<pkg>/merkle.py, verify_inclusion)."""
+    """(module path, function) a row id names: `merkle.verify_inclusion` -> (<pkg>/merkle.py, verify_inclusion).
+
+    A project of standalone scripts keeps them in `tools/` with no package (trustatlas): `host_reach.load` is
+    then tools/host_reach.py. The package layout is tried first, so a package that also has a tools/ folder
+    keeps resolving to its own modules."""
     module, _, function = row_name.partition(".")
     package = folder.name.replace("-", "_")
     for candidate in (
         folder / package / f"{module}.py",
         folder / package / module / "__init__.py",
+        folder / "tools" / f"{module}.py",
     ):
         if candidate.is_file() and function:
             return candidate.relative_to(folder).as_posix(), function.replace("-", "_")

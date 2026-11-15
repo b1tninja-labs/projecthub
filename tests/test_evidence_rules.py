@@ -247,3 +247,16 @@ def test_a_test_skipped_on_head_does_not_block_the_already_passes_path(tmp_path)
     (row,) = E.check(root, "demo", base_ref="HEAD~1")["rows"]
     assert row["l3"]["pre_existing"] is True
     assert row["ok"] is True, row
+
+
+def test_a_scripts_project_resolves_l4_targets_in_tools(tmp_path):
+    from projecthub.evidence import mutate as M
+
+    head = tmp_path / "scripts"
+    (head / "tools").mkdir(parents=True)
+    (head / "tools" / "host_reach.py").write_text(
+        "def load(doc):\n    return doc\n", encoding="utf-8"
+    )
+    assert M.locate(head, "host_reach.load") == ("tools/host_reach.py", "load")
+    assert E._target(M, head, "host_reach.load") == ("tools/host_reach.py", "load")
+    assert E._target(M, head, "host_reach.missing") is None
