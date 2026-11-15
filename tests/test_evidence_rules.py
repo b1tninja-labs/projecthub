@@ -219,3 +219,31 @@ def test_a_function_re_exported_by_a_package_init_is_found_where_it_is_defined(
         "dsa_key",
     )
     assert E._target(M, head, "build.missing") is None
+
+
+SKIPPY = """# demo
+
+| Obligation | Spec | Status | Where |
+|---|---|---|---|
+| `core.double` | RFC 0000 | {status} | Test: `tests/test_demo.py::test_double`; also `tests/test_demo.py::test_backend` |
+"""
+
+
+def test_a_test_skipped_on_head_does_not_block_the_already_passes_path(tmp_path):
+    root = _repo(tmp_path, SKIPPY)
+    T._commit(root, {"demo/core.py": T.REAL}, "the code lands without its row")
+    T._commit(
+        root,
+        {
+            "tests/test_demo.py": (
+                "import pytest\nfrom demo import double\n\n"
+                "def test_double():\n    assert double(1) == 2\n\n"
+                "def test_backend():\n    pytest.skip('this backend lacks the primitive')\n"
+            ),
+            "ROADMAP.md": SKIPPY.format(status="[ok]"),
+        },
+        "flip",
+    )
+    (row,) = E.check(root, "demo", base_ref="HEAD~1")["rows"]
+    assert row["l3"]["pre_existing"] is True
+    assert row["ok"] is True, row

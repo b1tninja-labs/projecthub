@@ -49,6 +49,7 @@ ASSERTING_CALLS = {"raises", "warns", "fail", "deprecated_call"}
 # A failure whose exception is one of these says the code under test is absent, not that it misbehaves.
 NOT_BEHAVIOURAL = ("ImportError", "ModuleNotFoundError")
 ALREADY_PASSES = "the named test already passes on base: it does not detect this change"
+SKIPPED_ON_HEAD = "the named test does not pass on head (skipped)"
 # How many of a row's cited tests L3 tries before giving up; each costs two pytest runs.
 MAX_CANDIDATES = 6
 # A code span in a Where cell that starts with `module.function`, bare or called with arguments
@@ -433,8 +434,11 @@ def audit_row(
     # Every cited test already passes on base. Whether or not the commit also touches source (a row's Where cell
     # fixed alongside code, a merge), no differential can tell this test from one written for nothing, so the
     # owner's ruling applies: L4 must show the test kills a mutant of the row's function.
+    # A test that skips on head (pkix's ML-DSA tests on a backend without ML-DSA) proves nothing either way, so it
+    # neither blocks this path nor counts towards it; at least one cited test must have run and passed on base.
+    ran = [t for t in tried if t["reason"] != SKIPPED_ON_HEAD]
     pre_existing = (
-        not ok and bool(tried) and all(t["reason"] == ALREADY_PASSES for t in tried)
+        not ok and bool(ran) and all(t["reason"] == ALREADY_PASSES for t in ran)
     )
     # New code (the owner's ruling of 2026-11-15): the test cannot even import it on base, so no differential
     # can fail behaviourally there. It passes on head, and L4 below must show it kills a mutant of the function.
