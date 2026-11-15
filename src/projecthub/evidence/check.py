@@ -528,27 +528,38 @@ def _target(M: Any, head: pathlib.Path, name: str) -> tuple[str, str] | None:
     if found is None:
         return None
     module, function = found
-    if function in _defined(head / module):
-        return found
+    qualified = _defined(head / module).get(function)
+    if qualified:
+        return module, qualified
     # A package's __init__ that re-exports the function: the definition is in one of the package's modules.
     if module.endswith("/__init__.py"):
         folder = (head / module).parent
         for path in sorted(folder.glob("*.py")):
-            if path.name != "__init__.py" and function in _defined(path):
-                return path.relative_to(head).as_posix(), function
+            qualified = (
+                _defined(path).get(function) if path.name != "__init__.py" else None
+            )
+            if qualified:
+                return path.relative_to(head).as_posix(), qualified
     return None
 
 
-def _defined(path: pathlib.Path) -> set[str]:
+def _defined(path: pathlib.Path) -> dict[str, str]:
+    """Function name to the name the mutator knows it by: a top-level function as itself, a method as
+    `Class.method` (`atlas.anchor` in a row means trustatlas's `Atlas.anchor`). A top-level function wins a clash."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError, ValueError):
-        return set()
-    return {
-        n.name
-        for n in ast.walk(tree)
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+        return {}
+    out: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            for inner in node.body:
+                if isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    out.setdefault(inner.name, f"{node.name}.{inner.name}")
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            out[node.name] = node.name
+    return out
 
 
 def tip_rows(

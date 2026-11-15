@@ -260,3 +260,17 @@ def test_a_scripts_project_resolves_l4_targets_in_tools(tmp_path):
     assert M.locate(head, "host_reach.load") == ("tools/host_reach.py", "load")
     assert E._target(M, head, "host_reach.load") == ("tools/host_reach.py", "load")
     assert E._target(M, head, "host_reach.missing") is None
+
+
+def test_a_src_layout_method_resolves_to_its_qualified_name(tmp_path):
+    from projecthub.evidence import mutate as M
+
+    head = tmp_path / "trustatlas"
+    (head / "src" / "trustatlas").mkdir(parents=True)
+    (head / "src" / "trustatlas" / "atlas.py").write_text(
+        "class Atlas:\n    def anchor(self, x):\n        return x\n", encoding="utf-8"
+    )
+    assert E._target(M, head, "atlas.anchor") == (
+        "src/trustatlas/atlas.py",
+        "Atlas.anchor",
+    )
