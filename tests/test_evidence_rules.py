@@ -190,3 +190,32 @@ def test_new_code_passes_only_when_its_test_kills_a_mutant_of_the_new_function(
     assert row["l4"]["ok"] is True and row["ok"] is True, row
     (off,) = E.check(root, "demo", base_ref="HEAD~1", mutate=False)["rows"]
     assert off["ok"] is False and "only L4" in off["reason"]
+
+
+def test_a_called_span_names_an_l4_target():
+    where = "`keys.parse_ecdsa_signature(der) -> (r, s)`, `keys.SignatureValueError`, `node.offset_of`"
+    assert E.FUNCTION_SPAN.findall(where) == [
+        "keys.parse_ecdsa_signature",
+        "node.offset_of",
+    ]
+
+
+def test_a_function_re_exported_by_a_package_init_is_found_where_it_is_defined(
+    tmp_path,
+):
+    from projecthub.evidence import mutate as M
+
+    pkg = tmp_path / "demo" / "demo" / "build"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text(
+        "from demo.build.certificate import dsa_key\n", encoding="utf-8"
+    )
+    (pkg / "certificate.py").write_text(
+        "def dsa_key(y):\n    return y\n", encoding="utf-8"
+    )
+    head = tmp_path / "demo"
+    assert E._target(M, head, "build.dsa_key") == (
+        "demo/build/certificate.py",
+        "dsa_key",
+    )
+    assert E._target(M, head, "build.missing") is None

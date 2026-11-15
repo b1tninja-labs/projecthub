@@ -51,8 +51,9 @@ NOT_BEHAVIOURAL = ("ImportError", "ModuleNotFoundError")
 ALREADY_PASSES = "the named test already passes on base: it does not detect this change"
 # How many of a row's cited tests L3 tries before giving up; each costs two pytest runs.
 MAX_CANDIDATES = 6
-# `module.function` or `module.function()` in a Where cell: an L4 target for a row whose id is a concept.
-FUNCTION_SPAN = re.compile(r"`([a-z_]\w*\.[a-z_]\w*)(?:\(\))?`")
+# A code span in a Where cell that starts with `module.function`, bare or called with arguments
+# (`keys.parse_ecdsa_signature(der) -> (r, s)`): an L4 target for a row whose id is a concept.
+FUNCTION_SPAN = re.compile(r"`([a-z_]\w*\.[a-z_]\w*)(?:\(|`)")
 
 
 # ---------------------------------------------------------------------------------------------- L1
@@ -521,16 +522,27 @@ def _target(M: Any, head: pathlib.Path, name: str) -> tuple[str, str] | None:
     if found is None:
         return None
     module, function = found
+    if function in _defined(head / module):
+        return found
+    # A package's __init__ that re-exports the function: the definition is in one of the package's modules.
+    if module.endswith("/__init__.py"):
+        folder = (head / module).parent
+        for path in sorted(folder.glob("*.py")):
+            if path.name != "__init__.py" and function in _defined(path):
+                return path.relative_to(head).as_posix(), function
+    return None
+
+
+def _defined(path: pathlib.Path) -> set[str]:
     try:
-        tree = ast.parse((head / module).read_text(encoding="utf-8"))
+        tree = ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError, ValueError):
-        return None
-    defined = {
+        return set()
+    return {
         n.name
         for n in ast.walk(tree)
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    return found if function in defined else None
 
 
 def tip_rows(
