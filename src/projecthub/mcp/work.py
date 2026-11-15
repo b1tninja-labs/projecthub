@@ -50,6 +50,7 @@ import json
 import pathlib
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 import uuid
@@ -693,6 +694,69 @@ class Store:
                 "state": "queued",
             }
 
+    def audit(
+        self, project: str, row_id: str, sha: str, root: pathlib.Path | None = None
+    ) -> dict[str, object]:
+        """Queue an evidence check for a row that already reads done at `sha`, with no lease.
+
+        A row flipped to [ok] before its commit was submitted could never be checked: its lease had lapsed, and
+        acquire refuses a done row because there is no work left to claim (pkix's eight rows of 2026-11-14).
+        Checking is not claiming, so this takes no lease and writes no Status; the worker judges it like any
+        other submission and the verdict, not this call, says whether the row stands.
+        """
+        commit = sha.strip().lower()
+        if not SHA.fullmatch(commit):
+            raise LeaseError(
+                "BAD_SHA", "audit a full 40-hex commit id, not a branch, tag or prefix"
+            )
+        from projecthub.db import parser as roadmap
+        from projecthub.evidence import worker as evidence
+
+        base = root or evidence.default_root()
+        repo = evidence.project_checkout(base, project)
+        matrix = roadmap.matrix_path(base, project)
+        if matrix is None:
+            raise LeaseError("NO_ROW", f"{project} has no roadmap matrix under {base}")
+        name = matrix.relative_to(repo).as_posix()
+        shown = subprocess.run(  # noqa: S603
+            ["git", "-C", str(repo), "show", f"{commit}:{name}"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if shown.returncode != 0:
+            raise LeaseError(
+                "NO_COMMIT",
+                f"{commit} or its roadmap is not in {repo}: {shown.stderr.strip()[:160]}",
+            )
+        rows = {r["name"]: r for r in roadmap.rows_of(shown.stdout)}
+        if row_id not in rows:
+            raise LeaseError(
+                "NO_ROW", f"{project} has no row {row_id} at {commit[:12]}"
+            )
+        if rows[row_id]["state"] != "done":
+            raise LeaseError(
+                "NOT_DONE",
+                f"{project}:{row_id} reads {rows[row_id]['status']} at {commit[:12]}; an open row is leased "
+                "and submitted, not audited",
+            )
+        key = row_key(project, row_id)
+        with self._write() as db:
+            cursor = db.execute(
+                "INSERT INTO submissions(row_key, sha, lease_id, at, state) VALUES (?, ?, NULL, ?, 'queued')",
+                (key, commit, self.now()),
+            )
+            self._event(db, None, key, "audit", commit, queue=False)
+            return {
+                "submission_id": int(cursor.lastrowid or 0),
+                "row_key": key,
+                "sha": commit,
+                "state": "queued",
+                "leased": False,
+            }
+
     # -- the outbox, for the process that drains it ------------------------------------------------
 
     def pending(self, limit: int = 50) -> list[dict[str, object]]:
@@ -1297,13 +1361,23 @@ def main(argv: list[str]) -> int:
         "         | block <lease_id> <kind> <detail>\n"
         "         | note <lease_id> <kind> <text> [--ref REF]... | park <lease_id> <note>\n"
         "         | propose <project> <kind> <title> --why TEXT [--spec S] [--found-in F]\n"
-        "         | submit <lease_id> <sha> | log <row_key> [--limit N] | outbox [--limit N]]",
+        "         | submit <lease_id> <sha> | audit <project> <row_id> <sha>\n"
+        "         | log <row_key> [--limit N] | outbox [--limit N]]",
         file=sys.stderr,
     )
     return 2
 
 
-WORK_COMMANDS = ("acquire", "note", "park", "propose", "submit", "log", "outbox")
+WORK_COMMANDS = (
+    "acquire",
+    "note",
+    "park",
+    "propose",
+    "submit",
+    "audit",
+    "log",
+    "outbox",
+)
 
 
 def _work(store: Store, argv: list[str]) -> int:
@@ -1340,6 +1414,13 @@ def _work(store: Store, argv: list[str]) -> int:
     submit = sub.add_parser("submit", help="queue a commit for an evidence check")
     submit.add_argument("lease_id")
     submit.add_argument("sha")
+    audit = sub.add_parser(
+        "audit",
+        help="queue an evidence check for a row already [ok] at a commit; no lease",
+    )
+    audit.add_argument("project")
+    audit.add_argument("row_id")
+    audit.add_argument("sha")
     log = sub.add_parser("log", help="recent events on a row, with note text")
     log.add_argument("row_key")
     log.add_argument("--limit", type=int, default=20)
@@ -1388,6 +1469,8 @@ def _work(store: Store, argv: list[str]) -> int:
             )
         elif args.command == "submit":
             got = store.submit(args.lease_id, args.sha)
+        elif args.command == "audit":
+            got = store.audit(args.project, args.row_id, args.sha)
         elif args.command == "log":
             got = {
                 "row_key": args.row_key,
