@@ -48,3 +48,13 @@ def test_an_unknown_row_and_a_short_sha_are_refused(tmp_path):
         store.audit("demo", "core.triple", base, root=tmp_path)
     with pytest.raises(L.LeaseError, match="BAD_SHA"):
         store.audit("demo", "core.double", base[:7], root=tmp_path)
+
+
+def test_a_row_id_written_with_parentheses_is_accepted(tmp_path):
+    root, _ = _make(tmp_path)
+    T._commit(root, {"ROADMAP.md": T.MATRIX.format(status="[ok]")}, "flip")
+    sha = T._git(root, "rev-parse", "HEAD")
+    got = L.Store(tmp_path / "leases.sqlite").audit(
+        "demo", "core.double()", sha, root=tmp_path
+    )
+    assert got["row_key"] == "demo:core.double"

@@ -321,6 +321,7 @@ def differential(
             **detail,
             "reason": f"on base the test {on_base.outcome}s rather than fails: that shows the code is absent, "
             "not that the behaviour is checked",
+            "absent_on_base": True,
         }
     if any(
         on_base.message.startswith(name) or f"{name}:" in on_base.message[:200]
@@ -329,6 +330,7 @@ def differential(
         return False, {
             **detail,
             "reason": "on base the test fails with an import error, not a behavioural failure",
+            "absent_on_base": True,
         }
     return True, {**detail, "reason": "fails on base, passes on head"}
 
@@ -416,7 +418,15 @@ def audit_row(
     ok, detail = False, dict[str, object]()
     for candidate in candidates:
         ok, detail = differential(head, base_dir, candidate, scratch, runner)
-        tried.append({"node": candidate, "ok": ok, "reason": detail["reason"]})
+        tried.append(
+            {
+                "node": candidate,
+                "ok": ok,
+                "reason": detail["reason"],
+                "absent_on_base": bool(detail.get("absent_on_base")),
+                "passes_on_head": _head_passed(detail),
+            }
+        )
         if ok:
             break
     pre_existing = (
@@ -424,8 +434,24 @@ def audit_row(
         and all(t["reason"] == ALREADY_PASSES for t in tried)
         and not any(_is_source(p) for p in changed)
     )
+    # New code (the owner's ruling of 2026-11-15): the test cannot even import it on base, so no differential
+    # can fail behaviourally there. It passes on head, and L4 below must show it kills a mutant of the function.
+    fresh = next(
+        (t for t in tried if t["absent_on_base"] and t["passes_on_head"]), None
+    )
+    new_code = not ok and not pre_existing and fresh is not None
+    mandatory = pre_existing or new_code
     if ok:
         out.l3 = {"ok": True, **detail, "proved_by": tried[-1]["node"], "tried": tried}
+    elif new_code:
+        assert fresh is not None
+        out.l3 = {
+            "ok": True,
+            "new_code": True,
+            "reason": "the code is new in this commit (the test cannot import it on base); L4 must prove the test",
+            "proved_by": fresh["node"],
+            "tried": tried,
+        }
     elif pre_existing:
         # Every cited test passes on base and the commit changes no source: the behaviour was already there
         # (pkix's chain.issuer_binding). A differential cannot show that, so L4 below becomes mandatory.
@@ -441,9 +467,9 @@ def audit_row(
         return out
     out.ok = True
     if not mutate:
-        if pre_existing:
+        if mandatory:
             out.ok = False
-            out.reason = "L4 is off, and only L4 can prove a test for behaviour that predates the commit"
+            out.reason = "L4 is off, and only L4 can prove a test for new code or behaviour that predates the commit"
         return out
     from projecthub.evidence import mutate as M
 
@@ -464,11 +490,16 @@ def audit_row(
             "ok": None,
             "skipped": f"{row['name']} names no module.function to mutate",
         }
-        if pre_existing:
+        if mandatory:
             out.ok = False
             out.reason = (
-                "L4: the behaviour predates this commit and the row names no function to mutate, "
-                "so nothing shows the test would catch a regression"
+                "L4: "
+                + (
+                    "the code is new in this commit"
+                    if new_code
+                    else "the behaviour predates this commit"
+                )
+                + " and the row names no function to mutate, so nothing shows the test would catch a regression"
             )
         return out
     proving = [str(out.l3.get("proved_by") or node)]
@@ -516,6 +547,11 @@ def tip_rows(
         return {}
     text = shown.stdout.decode("utf-8", errors="replace")
     return {r["name"]: r for r in roadmap.rows_of(text)}
+
+
+def _head_passed(detail: dict[str, object]) -> bool:
+    head = detail.get("head")
+    return isinstance(head, dict) and head.get("outcome") == "passed"
 
 
 def _is_source(path: str) -> bool:

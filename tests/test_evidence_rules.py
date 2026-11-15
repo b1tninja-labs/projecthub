@@ -154,3 +154,39 @@ def test_a_row_testless_at_the_commit_takes_its_evidence_from_the_branch_tip(tmp
     (row,) = E.check(root, "demo", f"{flipped}~1", flipped, mutate=False)["rows"]
     assert row["ok"] is True, row
     assert row["l1"]["evidence_from"] == "branch tip"
+
+
+NEW = """# demo
+
+| Obligation | Spec | Status | Where |
+|---|---|---|---|
+| `extra.triple` | RFC 0000 | {status} | Test: `tests/test_demo.py::test_triple` |
+"""
+TRIPLE = (
+    "def triple(n):\n    if n < 0:\n        raise ValueError(n)\n    return 3 * n\n"
+)
+TRIPLE_TEST = (
+    "import pytest\nfrom demo.extra import triple\n\n"
+    "def test_triple():\n    assert triple(1) == 3\n    with pytest.raises(ValueError):\n        triple(-1)\n"
+)
+
+
+def test_new_code_passes_only_when_its_test_kills_a_mutant_of_the_new_function(
+    tmp_path,
+):
+    """The owner's ruling of 2026-11-15: a test that cannot import new code on base is proved by L4 instead."""
+    root = _repo(tmp_path, NEW)
+    T._commit(
+        root,
+        {
+            "demo/extra.py": TRIPLE,
+            "tests/test_demo.py": TRIPLE_TEST,
+            "ROADMAP.md": NEW.format(status="[ok]"),
+        },
+        "new code with its test",
+    )
+    (row,) = E.check(root, "demo", base_ref="HEAD~1")["rows"]
+    assert row["l3"]["new_code"] is True
+    assert row["l4"]["ok"] is True and row["ok"] is True, row
+    (off,) = E.check(root, "demo", base_ref="HEAD~1", mutate=False)["rows"]
+    assert off["ok"] is False and "only L4" in off["reason"]

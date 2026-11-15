@@ -732,6 +732,9 @@ class Store:
                 f"{commit} or its roadmap is not in {repo}: {shown.stderr.strip()[:160]}",
             )
         rows = {r["name"]: r for r in roadmap.rows_of(shown.stdout)}
+        if row_id not in rows and row_id.endswith("()"):
+            # ROADMAP ids are spelled `validity.check_signature()` but parsed without the parentheses.
+            row_id = row_id[:-2]
         if row_id not in rows:
             raise LeaseError(
                 "NO_ROW", f"{project} has no row {row_id} at {commit[:12]}"
