@@ -945,6 +945,16 @@ def active_items(items: Iterable[Item]) -> list[str]:
     ]
 
 
+# GitHub does not document a Projects text field's maximum; values over a thousand characters were refused on
+# 2026-11-14, so the board keeps well under that.
+TEXT_MAX = 900
+
+
+def clip(value: str, limit: int = TEXT_MAX) -> str:
+    """`value` cut to `limit` characters with a trailing "…", unchanged when it fits."""
+    return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
+
+
 def row_values(
     row: dict[str, str], tier: int, wave: int, node: str = ""
 ) -> dict[str, object]:
@@ -955,12 +965,16 @@ def row_values(
     GitHub rejected every one of trustatlas's long rows with "Column value must be a valid value for text
     column", so `--apply` failed its writes and `--check` reported the same six differences forever. A board
     field is a pointer to evidence, not a copy of it.
+
+    Spec is clipped for the same reason: pkix's anchors.anchor_name_constraints and cab.member carry Spec
+    cells over a thousand characters, GitHub refused them with the same message, and every `--apply` rewrote
+    the same values while `--check` kept reporting them. The clip is deterministic, so a re-run compares equal.
     """
     done = STATUSES.get(row["status"], ("", "open"))[1] == "close"
     return {
         "Level": "Obligation",
-        "Spec": row["spec"],
-        "Named test": node,
+        "Spec": clip(row["spec"]),
+        "Named test": clip(node),
         "Priority": priority(tier),
         "Wave": f"Wave {wave}" if wave else "",
         "Status": "Done" if done else "Backlog",
