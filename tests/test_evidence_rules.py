@@ -125,3 +125,32 @@ def _repo(tmp_path: pathlib.Path, matrix: str) -> pathlib.Path:
         "base",
     )
     return root
+
+
+NOTES = """# demo
+
+| Obligation | Spec | Status | Notes |
+|---|---|---|---|
+| `core.double` | RFC 0000 | {status} | `tests/test_demo.py::test_double` |
+"""
+
+
+def test_a_row_testless_at_the_commit_takes_its_evidence_from_the_branch_tip(tmp_path):
+    """asn1core headed its evidence column "Notes" until a later fix: rows read as testless at every older sha."""
+    root = _repo(tmp_path, NOTES)
+    T._commit(
+        root,
+        {
+            "demo/core.py": T.REAL,
+            "tests/test_demo.py": "from demo import double\n\ndef test_double():\n    assert double(21) == 42\n",
+            "ROADMAP.md": NOTES.format(status="[ok]"),
+        },
+        "flip under the old header",
+    )
+    flipped = T._git(root, "rev-parse", "HEAD")
+    before = E.check(root, "demo", f"{flipped}~1", flipped, mutate=False)["rows"][0]
+    assert before["ok"] is False and "none" in before["reason"]
+    T._commit(root, {"ROADMAP.md": T.MATRIX.format(status="[ok]")}, "header fixed")
+    (row,) = E.check(root, "demo", f"{flipped}~1", flipped, mutate=False)["rows"]
+    assert row["ok"] is True, row
+    assert row["l1"]["evidence_from"] == "branch tip"

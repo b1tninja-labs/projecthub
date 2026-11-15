@@ -375,9 +375,21 @@ def audit_row(
     runner: Callable[..., Run] = run_node,
     mutate: bool = True,
     changed: Sequence[str] = (),
+    tip_row: dict[str, str] | None = None,
 ) -> Audit:
     out = Audit(f"{project}:{row['name']}", row["title"])
     node, state = roadmap.named_test(heads, project, row["where"], row["evidence"])
+    if state == "none" and tip_row is not None:
+        # The row names no test at the submitted commit, but does at the branch tip: asn1core's section 3 headed
+        # its evidence column "Notes" until f985bc6, so every row there read as testless at every earlier sha.
+        # The evidence statement is taken from the tip; the code, the tests and the differential stay at the
+        # submitted commit, so a test the tip names but the commit lacks is still reported missing.
+        node, state = roadmap.named_test(
+            heads, project, tip_row["where"], tip_row["evidence"]
+        )
+        if state != "none":
+            row = {**row, "where": tip_row["where"], "evidence": tip_row["evidence"]}
+            out.l1 = {"evidence_from": "branch tip"}
     out.node = node
     if state != "exists" or "::" not in node:
         out.reason = (
@@ -388,7 +400,7 @@ def audit_row(
     path, *parts = node.split("::")
     tree = ast.parse((head / path).read_text(encoding="utf-8"))
     ok, why = asserts(tree, parts)
-    out.l1 = {"ok": ok, "reason": why}
+    out.l1 = {**out.l1, "ok": ok, "reason": why}
     if not ok:
         out.reason = f"L1: {why}"
         return out
@@ -490,6 +502,22 @@ def _target(M: Any, head: pathlib.Path, name: str) -> tuple[str, str] | None:
     return found if function in defined else None
 
 
+def tip_rows(
+    repo: pathlib.Path, heads: pathlib.Path, project: str
+) -> dict[str, dict[str, str]]:
+    """The project's matrix rows as the repository's current HEAD reads them, by `git show`, for rows whose
+    evidence cell the submitted commit could not be parsed for. Empty when the matrix cannot be read there."""
+    path = roadmap.matrix_path(heads, project)
+    if path is None:
+        return {}
+    name = path.relative_to(roadmap.project_dir(heads, project)).as_posix()
+    shown = git(repo, "show", f"HEAD:{name}")
+    if shown.returncode != 0:
+        return {}
+    text = shown.stdout.decode("utf-8", errors="replace")
+    return {r["name"]: r for r in roadmap.rows_of(text)}
+
+
 def _is_source(path: str) -> bool:
     """A changed path that is code under test, not a test, a document or the roadmap itself."""
     pure = pathlib.PurePosixPath(path)
@@ -535,6 +563,7 @@ def check(
             else ["?"]
         )
         after, before = matrix_rows(heads, project), matrix_rows(bases, project)
+        tip = tip_rows(repo, heads, project)
         wanted = list(rows) or flipped(before, after)
         unknown = [r for r in wanted if r not in after]
         if unknown:
@@ -555,7 +584,15 @@ def check(
             if isolation
             else [
                 audit_row(
-                    after[r], project, heads, bases, scratch, runner, mutate, changed
+                    after[r],
+                    project,
+                    heads,
+                    bases,
+                    scratch,
+                    runner,
+                    mutate,
+                    changed,
+                    tip.get(r),
                 )
                 for r in wanted
             ]
