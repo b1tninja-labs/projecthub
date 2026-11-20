@@ -263,11 +263,11 @@ EXTRA: dict[
         "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/berkit; not on crates.io)",
         (),
     ),
-    "vcxcomm": (
+    "vcxtoolkit": (
         "Library",
         0,
         0,
-        "vcxcomm",
+        "vcxtoolkit",
         "VCX serial frames for a VXDIAG dongle: one frame, its checksum and its DD escape",
         "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-20; local repository, no remote; not on crates.io)",
         (),
