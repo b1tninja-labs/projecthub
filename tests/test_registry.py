@@ -263,12 +263,13 @@ def test_the_bluetooth_mx_path_is_registered():
 
 
 def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
-    """PORTFOLIO.md section 3 (2026-11-21): the five offline vehicle format and diagnostics
-    readers are registry rows and HAND_OWNED, so import, query and the five Python gates all see
-    them. Each is a standard-library-only Python Library; isotpkit is the transport layer under
-    udsdiag and imports nothing from it, so none depends on another."""
+    """PORTFOLIO.md section 3 (2026-11-21): the offline vehicle format and diagnostics readers are
+    registry rows, so import and query see them. None imports another, so each depends on nothing.
+    spswire stays a standard-library-only Python reader in HAND_OWNED (Python-gated); the four
+    diagnostics crates - udskit (renamed from udsdiag), isotpkit, mode06kit and gmdtcdb - were ported
+    to Rust and moved to RUST_OWNED (synced, not Python-gated)."""
     entries = {e.name: e for e in p.entries()}
-    for name in ("spswire", "isotpkit", "udsdiag", "mode06kit", "gmdtcdb"):
+    for name in ("spswire", "isotpkit", "udskit", "mode06kit", "gmdtcdb"):
         entry = entries[name]
         assert (entry.kind, entry.tier, entry.wave, entry.directory, entry.depends) == (
             "Library",
@@ -279,8 +280,10 @@ def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
         )
     from projecthub.db import parser
 
-    assert {"spswire", "isotpkit", "udsdiag", "mode06kit", "gmdtcdb"} <= set(
-        parser.HAND_OWNED
+    assert "spswire" in parser.HAND_OWNED
+    assert {"udskit", "isotpkit", "mode06kit", "gmdtcdb"} <= set(parser.RUST_OWNED)
+    assert not (
+        {"udskit", "udsdiag", "isotpkit", "mode06kit", "gmdtcdb"} & set(parser.HAND_OWNED)
     )
 
 

@@ -486,11 +486,11 @@ EXTRA: dict[
         "PORTFOLIO.md s3 (registered 2026-11-19; https://github.com/b1tninja-labs/spskit)",
         (),
     ),
-    # Vehicle format and diagnostics readers, registered 2026-11-21 (PORTFOLIO.md s3, rows added
-    # the same day). All are offline, standard-library-only Python readers that open no bus and
-    # program no vehicle. isotpkit is the transport layer under udsdiag and imports nothing from it;
-    # mode06kit and gmdtcdb are the parser and the full-dataset counterparts to catalogs udsdiag
-    # only samples. None imports another, so each depends on nothing.
+    # Vehicle format and diagnostics readers, registered 2026-11-21 (PORTFOLIO.md s3). All are offline,
+    # open no bus and program no vehicle; none imports another, so each depends on nothing. spswire is a
+    # standard-library-only Python reader (HAND_OWNED, Python-gated). The four diagnostics crates -
+    # udskit (renamed from udsdiag), isotpkit, mode06kit and gmdtcdb - were ported Python -> Rust on
+    # 2026-11-21 (isotpkit's PR merged last) and are in RUST_OWNED (synced, not Python-gated).
     "spswire": (
         "Library",
         0,
@@ -505,17 +505,17 @@ EXTRA: dict[
         0,
         0,
         "isotpkit",
-        "an offline ISO 15765-2:2016 (ISO-TP, DoCAN) transport/network-layer codec: it segments a UDS/GMLAN PDU into the four N_PDU types on classic-CAN frames and reassembles them; the transport layer under udsdiag, importing nothing from it, and it runs no bus",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/isotpkit)",
+        "an offline ISO 15765-2:2016 (ISO-TP, DoCAN) transport/network-layer codec: it segments a UDS/GMLAN PDU into the four N_PDU types on classic-CAN frames and reassembles them; the transport layer under udskit, importing nothing from it, and it runs no bus",
+        "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/isotpkit)",
         (),
     ),
-    "udsdiag": (
+    "udskit": (
         "Library",
         0,
         0,
-        "udsdiag",
+        "udskit",
         "an offline model of UDS (ISO 14229-1:2013) and GM GMLAN diagnostic services: the SID and NRC catalogs, a request/response PDU codec, and reference catalogs for DIDs, DTCs, RoutineControl, IOControl and SecurityAccess; it opens no bus and writes nothing to a vehicle",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/udsdiag)",
+        "PORTFOLIO.md s3 (registered 2026-11-21 as udsdiag; renamed udskit and ported to Rust 2026-11-21; https://github.com/b1tninja-labs/udskit)",
         (),
     ),
     "mode06kit": (
@@ -524,7 +524,7 @@ EXTRA: dict[
         0,
         "mode06kit",
         "a parser for GM's published Mode $06 / SAE J1979 (ISO 15031-5) OBD documents into a typed OBD Monitor ID / Test ID / unit-and-scaling model, read through the primarysource gm_* tools; it vendors no PDF",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/mode06kit)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/mode06kit)",
         (),
     ),
     "gmdtcdb": (
@@ -532,8 +532,8 @@ EXTRA: dict[
         0,
         0,
         "gmdtcdb",
-        "the full 841-code GM Diagnostic Trouble Code database for the Volt, joined to GM's 17OBDG01 Hybrid Diagnostics fault-code set, with a query CLI; the complete-dataset counterpart to the subset in udsdiag",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdtcdb)",
+        "the full 841-code GM Diagnostic Trouble Code database for the Volt, joined to GM's 17OBDG01 Hybrid Diagnostics fault-code set, with a query CLI; the complete-dataset counterpart to the subset in udskit",
+        "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/gmdtcdb)",
         (),
     ),
     "gattmirror": (
