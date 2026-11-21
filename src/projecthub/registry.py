@@ -406,7 +406,7 @@ EXTRA: dict[
         0,
         "vcxtoolkit",
         "VCX serial frames for a VXDIAG dongle: one frame, its checksum and its DD escape",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-20; local repository, no remote; not on crates.io)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-20; https://github.com/b1tninja-labs/vcxtoolkit; not on crates.io)",
         (),
     ),
     "cardkit": (
@@ -471,7 +471,7 @@ EXTRA: dict[
         0,
         "spskit",
         "SPS2 module downloader for a licensed TDS subscription; it does not program a vehicle",
-        "PORTFOLIO.md s3 (registered 2026-11-19; local repository, no remote)",
+        "PORTFOLIO.md s3 (registered 2026-11-19; https://github.com/b1tninja-labs/spskit)",
         (),
     ),
     "gattmirror": (
@@ -480,7 +480,7 @@ EXTRA: dict[
         0,
         "gattmirror",
         "mirrors a Bluetooth LE peripheral into the Android emulator over the netsimd HCI socket",
-        "PORTFOLIO.md s3 (registered 2026-11-14; local repository, no remote; publish = false)",
+        "PORTFOLIO.md s3 (registered 2026-11-14; https://github.com/b1tninja-labs/gattmirror; publish = false)",
         (),
     ),
     "fakeobd": (
