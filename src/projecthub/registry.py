@@ -472,7 +472,7 @@ EXTRA: dict[
         0,
         0,
         "techlinekit",
-        "ACDelco TDS and Techline Connect client: sign-in, downloads, and SPS Info; it does not program a vehicle",
+        "ACDelco TDS and Techline Connect client: sign-in, licensed downloads, SPS Info, and the launcher handoff; it does not program a vehicle",
         "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/techlinekit; tdskit refused)",
         (),
     ),
