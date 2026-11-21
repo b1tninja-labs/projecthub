@@ -455,8 +455,9 @@ EXTRA: dict[
         "decided 2026-11-12: tier 3, unsequenced, not active",
     ),
     # Vehicle tools, registered 2026-11-21. Untiered. None imports another yet: voltkit writes a
-    # profile, tdssignin keeps the TDS session, spskit reads a saved module, and the dongle frame
-    # stays in vcxtoolkit. spskit will import tdssignin once its dirty checkout is clean.
+    # profile, techlinekit is the TDS and Techline client, spskit keeps the programming
+    # request, and the dongle frame stays in vcxtoolkit. spskit will import techlinekit once
+    # its dirty checkout is clean.
     "voltkit": (
         "Tooling",
         0,
@@ -466,13 +467,13 @@ EXTRA: dict[
         "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/voltkit; publish = false)",
         (),
     ),
-    "tdssignin": (
+    "techlinekit": (
         "Library",
         0,
         0,
-        "tdssignin",
-        "ACDelco TDS sign-in shared by spskit and a future Techline client; it does not program a vehicle",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/tdssignin; tdskit refused)",
+        "techlinekit",
+        "ACDelco TDS and Techline Connect client: sign-in, downloads, and SPS Info; it does not program a vehicle",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/techlinekit; tdskit refused)",
         (),
     ),
     "spskit": (
