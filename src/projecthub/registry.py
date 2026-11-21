@@ -463,7 +463,7 @@ EXTRA: dict[
         0,
         "voltkit",
         "ELM327 read client for the Voltage Wi-Fi session and a Windows COM port",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/voltkit; publish = false)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/voltkit; publish = false)",
         (),
     ),
     "tdssignin": (
