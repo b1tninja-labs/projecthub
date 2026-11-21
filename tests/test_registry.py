@@ -204,12 +204,14 @@ def test_asn1wire_is_the_typescript_reader_and_depends_on_nothing():
 
 
 def test_the_vehicle_tools_are_registered_and_depend_on_nothing():
-    """PORTFOLIO.md section 3 (2026-11-21): voltkit, spskit, gattmirror, fakeobd and obd-bridge are
-    registry rows. None imports another. spskit keeps a Python matrix. gattmirror, fakeobd and
-    voltkit keep the Rust table. obd-bridge has no obligation matrix yet, so sync does not own it."""
+    """PORTFOLIO.md section 3 (2026-11-21): voltkit, tdssignin, spskit, gattmirror, fakeobd and
+    obd-bridge are registry rows. None imports another yet. tdssignin and spskit keep a Python
+    matrix. gattmirror, fakeobd and voltkit keep the Rust table. obd-bridge has no obligation
+    matrix yet, so sync does not own it."""
     entries = {e.name: e for e in p.entries()}
     kinds = {
         "voltkit": "Tooling",
+        "tdssignin": "Library",
         "spskit": "Library",
         "gattmirror": "Library",
         "fakeobd": "Tooling",
@@ -226,7 +228,7 @@ def test_the_vehicle_tools_are_registered_and_depend_on_nothing():
         )
     from projecthub.db import parser
 
-    assert "spskit" in parser.HAND_OWNED
+    assert {"spskit", "tdssignin"} <= set(parser.HAND_OWNED)
     assert {"gattmirror", "fakeobd", "voltkit"} <= set(parser.RUST_OWNED)
     assert "obd-bridge" not in parser.RUST_OWNED
 

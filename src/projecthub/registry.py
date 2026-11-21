@@ -454,8 +454,9 @@ EXTRA: dict[
         "explainable Kconfig analysis: a minimal kernel config from hardware, with a reason for every option",
         "decided 2026-11-12: tier 3, unsequenced, not active",
     ),
-    # Vehicle tools, registered 2026-11-21. Untiered. None imports another: voltkit writes a profile,
-    # spskit reads a saved module, and the dongle frame stays in vcxtoolkit.
+    # Vehicle tools, registered 2026-11-21. Untiered. None imports another yet: voltkit writes a
+    # profile, tdssignin keeps the TDS session, spskit reads a saved module, and the dongle frame
+    # stays in vcxtoolkit. spskit will import tdssignin once its dirty checkout is clean.
     "voltkit": (
         "Tooling",
         0,
@@ -463,6 +464,15 @@ EXTRA: dict[
         "voltkit",
         "ELM327 read client for the Voltage Wi-Fi session and a Windows COM port",
         "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/voltkit; publish = false)",
+        (),
+    ),
+    "tdssignin": (
+        "Library",
+        0,
+        0,
+        "tdssignin",
+        "ACDelco TDS sign-in shared by spskit and a future Techline client; it does not program a vehicle",
+        "PORTFOLIO.md s3 (registered 2026-11-21; tdskit refused, one keystroke from live packages)",
         (),
     ),
     "spskit": (

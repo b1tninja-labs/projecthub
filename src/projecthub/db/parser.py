@@ -535,6 +535,7 @@ HAND_OWNED = (
     "udfvol",
     "asn1wire",
     "spskit",
+    "tdssignin",
 )
 
 
