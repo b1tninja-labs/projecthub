@@ -382,4 +382,4 @@ def test_a_rust_issue_title_is_short_enough_for_github(root):
 
 
 def test_the_default_run_includes_the_rust_repositories():
-    assert {"berkit", "cardkit", "piv-card"} <= set(s.default_projects())
+    assert {"berkit", "cardkit", "piv-card", "obd-bridge"} <= set(s.default_projects())

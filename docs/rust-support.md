@@ -56,8 +56,9 @@ Sources: <https://doc.rust-lang.org/cargo/reference/manifest.html>,
 
 ## How Rust ROADMAPs are read
 
-`projecthub sync` reads the obligation tables of berkit, cardkit and piv-card (`roadmap.RUST_OWNED`, part of the
-default project list). The grammar is the one in `db/parser.py`, with one more table shape:
+`projecthub sync` reads the obligation tables of every name in `roadmap.RUST_OWNED`, part of the
+default project list. `obd-bridge` is one of those names, and its matrix is `obd-bridge/ROADMAP.md`.
+The grammar is the one in `db/parser.py`, with one more table shape:
 
     | Status | Obligation | Anchor | Test |
 

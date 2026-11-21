@@ -454,18 +454,19 @@ EXTRA: dict[
         "explainable Kconfig analysis: a minimal kernel config from hardware, with a reason for every option",
         "decided 2026-11-12: tier 3, unsequenced, not active",
     ),
-    # Vehicle tools, registered 2026-11-21. Untiered. None imports another yet: voltkit writes a
-    # profile, techlinekit is the TDS and Techline client, spskit keeps the programming
-    # request, and the dongle frame stays in vcxtoolkit. spskit will import techlinekit once
-    # its dirty checkout is clean.
+    # Vehicle tools, registered 2026-11-21. Untiered. spskit will import techlinekit once its
+    # dirty checkout is clean. The Bluetooth MX path is not that import: obdhub path-depends on
+    # gattmirror and fakeobd, and voltkit's lab and bench commands start fakeobd and obd-bridge.
+    # obd-bridge keeps its own WinRT client and does not depend on gattmirror. PORTFOLIO.md
+    # section 6 still draws none of these edges.
     "voltkit": (
         "Tooling",
         0,
         0,
         "voltkit",
         "ELM327 read client for the Voltage Wi-Fi session and a Windows COM port",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/voltkit; publish = false)",
-        (),
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/voltkit; publish = false); voltkit/ROADMAP.md lab and bench commands",
+        ("fakeobd", "obd-bridge"),
     ),
     "techlinekit": (
         "Library",
@@ -481,8 +482,58 @@ EXTRA: dict[
         0,
         0,
         "spskit",
-        "SPS2 module downloader for a licensed TDS subscription; it does not program a vehicle",
+        "SPS2 module downloader and programming-data request for a licensed TDS subscription; it does not program a vehicle",
         "PORTFOLIO.md s3 (registered 2026-11-19; https://github.com/b1tninja-labs/spskit)",
+        (),
+    ),
+    # Vehicle format and diagnostics readers, registered 2026-11-21 (PORTFOLIO.md s3, rows added
+    # the same day). All are offline, standard-library-only Python readers that open no bus and
+    # program no vehicle. isotpkit is the transport layer under udsdiag and imports nothing from it;
+    # mode06kit and gmdtcdb are the parser and the full-dataset counterparts to catalogs udsdiag
+    # only samples. None imports another, so each depends on nothing.
+    "spswire": (
+        "Library",
+        0,
+        0,
+        "spswire",
+        "read-only readers for GMG3 SPS update-container formats: the 0x4d uImage LZ77 codec, the U-Boot legacy header, the i.MX6 IVT, the GM .smd PEM bundle and the .mnf release XML; it does not flash, sign or open a device",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/spswire)",
+        (),
+    ),
+    "isotpkit": (
+        "Library",
+        0,
+        0,
+        "isotpkit",
+        "an offline ISO 15765-2:2016 (ISO-TP, DoCAN) transport/network-layer codec: it segments a UDS/GMLAN PDU into the four N_PDU types on classic-CAN frames and reassembles them; the transport layer under udsdiag, importing nothing from it, and it runs no bus",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/isotpkit)",
+        (),
+    ),
+    "udsdiag": (
+        "Library",
+        0,
+        0,
+        "udsdiag",
+        "an offline model of UDS (ISO 14229-1:2013) and GM GMLAN diagnostic services: the SID and NRC catalogs, a request/response PDU codec, and reference catalogs for DIDs, DTCs, RoutineControl, IOControl and SecurityAccess; it opens no bus and writes nothing to a vehicle",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/udsdiag)",
+        (),
+    ),
+    "mode06kit": (
+        "Library",
+        0,
+        0,
+        "mode06kit",
+        "a parser for GM's published Mode $06 / SAE J1979 (ISO 15031-5) OBD documents into a typed OBD Monitor ID / Test ID / unit-and-scaling model, read through the primarysource gm_* tools; it vendors no PDF",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/mode06kit)",
+        (),
+    ),
+    "gmdtcdb": (
+        "Library",
+        0,
+        0,
+        "gmdtcdb",
+        "the full 841-code GM Diagnostic Trouble Code database for the Volt, joined to GM's 17OBDG01 Hybrid Diagnostics fault-code set, with a query CLI; the complete-dataset counterpart to the subset in udsdiag",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdtcdb)",
         (),
     ),
     "gattmirror": (
@@ -509,7 +560,34 @@ EXTRA: dict[
         0,
         "obd-bridge",
         "republishes a BLE ELM327 adapter as ELM327 over TCP",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/obd-bridge)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/obd-bridge); obligation matrix is obd-bridge/ROADMAP.md, read because the name is in RUST_OWNED",
+        (),
+    ),
+    "obdhub": (
+        "Tooling",
+        0,
+        0,
+        "obdhub",
+        "composes the emulator BLE frontend onto fakeobd through gattmirror",
+        "not a PORTFOLIO.md section 3 row; obdhub/crates/obdhub/Cargo.toml path-depends on gattmirror and fakeobd (Bluetooth MX map, 2026-11-21)",
+        ("gattmirror", "fakeobd"),
+    ),
+    "fakegatt": (
+        "Library",
+        0,
+        0,
+        "fakegatt",
+        "GATT scenarios over gattmirror and fakeobd; optional behind obdhub's fakegatt feature",
+        "not a PORTFOLIO.md section 3 row; fakegatt/docs/gattmirror-coupling.md (Bluetooth MX map, 2026-11-21). Kept out of RUST_OWNED while its roadmap still says the Core Specification is absent",
+        ("gattmirror", "fakeobd"),
+    ),
+    "obdlink-re": (
+        "Reference",
+        0,
+        0,
+        "obdlink-re",
+        "recovered OBDLink commands and the BLE serial service identifiers; no obligation matrix",
+        "not a PORTFOLIO.md section 3 row; obd-bridge and fakeobd cite it (Bluetooth MX map, 2026-11-21)",
         (),
     ),
 }

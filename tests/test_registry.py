@@ -203,11 +203,12 @@ def test_asn1wire_is_the_typescript_reader_and_depends_on_nothing():
     assert "asn1wire" in parser.HAND_OWNED
 
 
-def test_the_vehicle_tools_are_registered_and_depend_on_nothing():
-    """PORTFOLIO.md section 3 (2026-11-21): voltkit, techlinekit, spskit, gattmirror, fakeobd and
-    obd-bridge are registry rows. None imports another yet. techlinekit and spskit keep a Python
-    matrix. gattmirror, fakeobd and voltkit keep the Rust table. obd-bridge has no obligation
-    matrix yet, so sync does not own it."""
+def test_the_bluetooth_mx_path_is_registered():
+    """The Bluetooth MX map (2026-11-21): the emulator reaches fakeobd through obdhub and
+    gattmirror. voltkit's lab and bench commands start fakeobd and obd-bridge. obd-bridge does
+    not depend on gattmirror. techlinekit and spskit still depend on nothing. The matrix is
+    `obd-bridge/ROADMAP.md`, so the name is on the Rust sync list. fakegatt's roadmap still says
+    the Core Specification is absent, so fakegatt stays off that list. obdlink-re has no matrix."""
     entries = {e.name: e for e in p.entries()}
     kinds = {
         "voltkit": "Tooling",
@@ -216,11 +217,61 @@ def test_the_vehicle_tools_are_registered_and_depend_on_nothing():
         "gattmirror": "Library",
         "fakeobd": "Tooling",
         "obd-bridge": "Tooling",
+        "obdhub": "Tooling",
+        "fakegatt": "Library",
+        "obdlink-re": "Reference",
     }
     for name, kind in kinds.items():
         entry = entries[name]
-        assert (entry.kind, entry.tier, entry.wave, entry.directory, entry.depends) == (
+        assert (entry.kind, entry.tier, entry.wave, entry.directory) == (
             kind,
+            0,
+            0,
+            name,
+        )
+    assert entries["voltkit"].depends == ("fakeobd", "obd-bridge")
+    assert entries["obdhub"].depends == ("gattmirror", "fakeobd")
+    assert entries["fakegatt"].depends == ("gattmirror", "fakeobd")
+    assert entries["gattmirror"].depends == ()
+    assert entries["fakeobd"].depends == ()
+    assert entries["obd-bridge"].depends == ()
+    assert entries["obdlink-re"].depends == ()
+    assert entries["techlinekit"].depends == ()
+    assert entries["spskit"].depends == ()
+    from projecthub.db import parser
+
+    assert {"spskit", "techlinekit", "projecthub"} <= set(parser.HAND_OWNED)
+    assert {"gattmirror", "fakeobd", "voltkit", "obdhub", "obd-bridge"} <= set(
+        parser.RUST_OWNED
+    )
+    assert "fakegatt" not in parser.RUST_OWNED
+    assert "obdlink-re" not in parser.RUST_OWNED
+    text = (pathlib.Path(__file__).parents[1] / "ROADMAP.md").read_text(
+        encoding="utf-8"
+    )
+    rows = {row["name"]: row["status"] for row in parser.rows_of(text)}
+    assert rows["bt.flags-unread"] == "[no]"
+    assert rows["bt.obd-bridge-matrix"] == "[ok]"
+    from projecthub import paths
+
+    matrix = parser.matrix_path(paths.ROOT, "obd-bridge")
+    assert matrix is not None and matrix.name == "ROADMAP.md" and matrix.is_file()
+    parsed = parser.parse(matrix.read_text(encoding="utf-8"))
+    assert parsed.problems == []
+    assert parsed.rows
+    assert rows["bt.fakegatt-sync"] == "[ ]"
+
+
+def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
+    """PORTFOLIO.md section 3 (2026-11-21): the five offline vehicle format and diagnostics
+    readers are registry rows and HAND_OWNED, so import, query and the five Python gates all see
+    them. Each is a standard-library-only Python Library; isotpkit is the transport layer under
+    udsdiag and imports nothing from it, so none depends on another."""
+    entries = {e.name: e for e in p.entries()}
+    for name in ("spswire", "isotpkit", "udsdiag", "mode06kit", "gmdtcdb"):
+        entry = entries[name]
+        assert (entry.kind, entry.tier, entry.wave, entry.directory, entry.depends) == (
+            "Library",
             0,
             0,
             name,
@@ -228,9 +279,9 @@ def test_the_vehicle_tools_are_registered_and_depend_on_nothing():
         )
     from projecthub.db import parser
 
-    assert {"spskit", "techlinekit"} <= set(parser.HAND_OWNED)
-    assert {"gattmirror", "fakeobd", "voltkit"} <= set(parser.RUST_OWNED)
-    assert "obd-bridge" not in parser.RUST_OWNED
+    assert {"spswire", "isotpkit", "udsdiag", "mode06kit", "gmdtcdb"} <= set(
+        parser.HAND_OWNED
+    )
 
 
 def test_rust_crates_are_registered_with_their_path_dependencies():
