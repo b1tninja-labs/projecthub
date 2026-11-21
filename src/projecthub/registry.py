@@ -472,7 +472,7 @@ EXTRA: dict[
         0,
         "tdssignin",
         "ACDelco TDS sign-in shared by spskit and a future Techline client; it does not program a vehicle",
-        "PORTFOLIO.md s3 (registered 2026-11-21; tdskit refused, one keystroke from live packages)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/tdssignin; tdskit refused)",
         (),
     ),
     "spskit": (
