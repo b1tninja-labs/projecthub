@@ -1067,8 +1067,11 @@ def build(board: Board, only: set[str] | None) -> None:
         )
         rows_by[entry.name] = rows
         row_issues: dict[str, Issue] = {}
-        if state.repo and rows:
-            for issue in board.issues(issue_home(state.repo)):
+        # A plan directory has no repository. Its rows are filed in the shared portfolio
+        # repository, and the board still has to place them.
+        filing = state.repo or (issue_home("") if shared() else "")
+        if filing and rows:
+            for issue in board.issues(issue_home(filing)):
                 if not owned_by(issue.title, entry.name):
                     continue
                 found_row = ROW_MARKER.search(issue.body)
@@ -1168,7 +1171,8 @@ def build(board: Board, only: set[str] | None) -> None:
             links_by[entry.name],
         )
         parent = project_issues.get(entry.name)
-        if not (in_scope(entry.name) and state.repo and rows and row_issues and parent):
+        filing = state.repo or (issue_home("") if shared() else "")
+        if not (in_scope(entry.name) and filing and rows and row_issues and parent):
             continue
         # The same ladder the sync reads, so an epic never names a milestone the sync did not create (a
         # certledger "phase 0" epic once asked GitHub for a milestone that did not exist and stopped the run).

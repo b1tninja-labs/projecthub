@@ -728,13 +728,13 @@ def sync_one(
     if not rows:
         print(f"{name}: prose plan, no obligation matrix; nothing filed")
         return len(broken) if check else 0
-    # Plan and apply skip a project with no repository, because the first write against it would end the
-    # whole run. --check does not skip: a project whose issues cannot be read is not "in sync", and a gate
-    # that quietly passes on an unreachable repository reports green for the wrong reason.
-    if not check and not repo_exists(repo):
-        print(f"{name}: no GitHub repository {repo}; skipped (create it, then re-run)")
-        return 0
+    # Issues are filed in the shared portfolio repository when one is configured. A plan
+    # directory has no repository of its own, and that must not keep its rows off the board.
+    # --check does not skip: a project whose issues cannot be read is not "in sync".
     home = issue_home(repo)
+    if not check and not repo_exists(home):
+        print(f"{name}: no GitHub repository {home}; skipped (create it, then re-run)")
+        return 0
     ladder = (
         roadmap.ladder_for(root, name)
         if name in roadmap.LADDERS
