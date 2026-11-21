@@ -23,7 +23,7 @@ The grammar, all of it:
   invents an M-number for a project that does not use them.
 - Matrix files are found per project (D19): ROADMAP.md, then PLAN.md, then docs/roadmap.md, with a path
   override where a project keeps its matrix somewhere specific.
-- The Rust repositories (berkit, cardkit, piv-card) write `| Status | Obligation | Anchor | Test |`: Status
+- The Rust repositories (berkit, cardkit, piv-card, vcxtoolkit, gattmirror, fakeobd) write `| Status | Obligation | Anchor | Test |`: Status
   first, no id column. `[ok]` is done, `[unread]` (the test passes, the anchor could not be read cleanly from
   the standard) is partial work and so open, `[open]` is open. Such a row gets a derived id (see
   `derived_id`), and an `[ok]` row whose Test cell names no test is reported, not counted: done needs a
@@ -519,6 +519,22 @@ HAND_OWNED = (
     "localns",
     "trustatlas",
     "registrata",
+    "winhive",
+    "authroots",
+    "itrust",
+    "iso9660",
+    "plistwire",
+    "img4wire",
+    "lzfsewire",
+    "apfswire",
+    "udifwire",
+    "aeawire",
+    "wimwire",
+    "cabread",
+    "regfwire",
+    "udfvol",
+    "asn1wire",
+    "spskit",
 )
 
 
@@ -541,12 +557,13 @@ def matrix_path(root: pathlib.Path, project: str) -> pathlib.Path | None:
 
 # The Rust repositories, whose tables are `Status | Obligation | Anchor | Test`. Synced, not gated: there is
 # no pyproject, so shells verify never selects them.
-RUST_OWNED = ("berkit", "cardkit", "piv-card")
+RUST_OWNED = ("berkit", "cardkit", "piv-card", "vcxtoolkit", "gattmirror", "fakeobd")
 # Where a project keeps rows besides its matrix file: glob patterns relative to the project directory. The
 # matrix file then holds only what spans the fragments. A project absent here has one matrix file.
 FRAGMENTS = {
     "berkit": ("crates/berkit/roadmap/*.md",),
     "cardkit": ("crates/*/ROADMAP.md",),
+    "gattmirror": ("crates/*/ROADMAP.md",),
 }
 
 

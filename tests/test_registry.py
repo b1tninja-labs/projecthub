@@ -186,6 +186,52 @@ def test_round_4_support_libraries_carry_their_edges():
         )
 
 
+def test_asn1wire_is_the_typescript_reader_and_depends_on_nothing():
+    """PORTFOLIO.md sections 3 and 4 (2026-11-17): the TypeScript DER and X.509 reader is its own
+    library. It does not replace asn1core or berkit, and it imports neither."""
+    entry = next(e for e in p.entries() if e.name == "asn1wire")
+    assert (entry.kind, entry.tier, entry.wave, entry.directory) == (
+        "Library",
+        0,
+        0,
+        "asn1wire",
+    )
+    assert entry.depends == ()
+    assert "TypeScript" in entry.what
+    from projecthub.db import parser
+
+    assert "asn1wire" in parser.HAND_OWNED
+
+
+def test_the_vehicle_tools_are_registered_and_depend_on_nothing():
+    """PORTFOLIO.md section 3 (2026-11-21): voltkit, spskit, gattmirror, fakeobd and obd-bridge are
+    registry rows. None imports another. spskit keeps a Python matrix; gattmirror and fakeobd keep
+    the Rust table. voltkit and obd-bridge have no obligation matrix yet, so sync does not own them."""
+    entries = {e.name: e for e in p.entries()}
+    kinds = {
+        "voltkit": "Tooling",
+        "spskit": "Library",
+        "gattmirror": "Library",
+        "fakeobd": "Tooling",
+        "obd-bridge": "Tooling",
+    }
+    for name, kind in kinds.items():
+        entry = entries[name]
+        assert (entry.kind, entry.tier, entry.wave, entry.directory, entry.depends) == (
+            kind,
+            0,
+            0,
+            name,
+            (),
+        )
+    from projecthub.db import parser
+
+    assert "spskit" in parser.HAND_OWNED
+    assert {"gattmirror", "fakeobd"} <= set(parser.RUST_OWNED)
+    assert "voltkit" not in parser.RUST_OWNED
+    assert "obd-bridge" not in parser.RUST_OWNED
+
+
 def test_rust_crates_are_registered_with_their_path_dependencies():
     """PORTFOLIO.md sections 3 and 4 (2026-11-13): berkit and cardkit depend on nothing; piv-card depends on
     cardkit and berkit by path."""
