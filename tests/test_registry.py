@@ -258,14 +258,19 @@ def test_the_bluetooth_mx_path_is_registered():
     rows = {row["name"]: row["status"] for row in parser.rows_of(text)}
     assert rows["bt.flags-unread"] == "[no]"
     assert rows["bt.obd-bridge-matrix"] == "[ok]"
+    assert rows["bt.fakegatt-sync"] == "[ ]"
     from projecthub import paths
 
-    matrix = parser.matrix_path(paths.ROOT, "obd-bridge")
-    assert matrix is not None and matrix.name == "ROADMAP.md" and matrix.is_file()
-    parsed = parser.parse(matrix.read_text(encoding="utf-8"))
-    assert parsed.problems == []
-    assert parsed.rows
-    assert rows["bt.fakegatt-sync"] == "[ ]"
+    # The obd-bridge matrix lives in the sibling checkout, so it is only there when the whole
+    # workspace is present (a local tree or a workspace CI). A standalone projecthub checkout, as
+    # the project's own CI uses, has no sibling to read, so validate obd-bridge's lock only when
+    # its directory exists rather than failing where there is nothing to validate.
+    if parser.project_dir(paths.ROOT, "obd-bridge").is_dir():
+        matrix = parser.matrix_path(paths.ROOT, "obd-bridge")
+        assert matrix is not None and matrix.name == "ROADMAP.md" and matrix.is_file()
+        parsed = parser.parse(matrix.read_text(encoding="utf-8"))
+        assert parsed.problems == []
+        assert parsed.rows
 
 
 def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
