@@ -575,6 +575,7 @@ RUST_OWNED = (
     "gmdtcdb",
     "gmdiag",
     "spskit",
+    "vcikit",
 )
 # Where a project keeps rows besides its matrix file: glob patterns relative to the project directory. The
 # matrix file then holds only what spans the fragments. A project absent here has one matrix file.

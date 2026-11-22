@@ -547,7 +547,29 @@ EXTRA: dict[
         "gmdiag",
         "a live read/write GM Techline/GDS2 diagnostic driver: a Transport trait with ELM327-over-TCP, a UDS/GMLAN session core over udskit/isotpkit/gmdtcdb/mode06kit, and a read-first CLI with gated writes (fakeobd-first)",
         "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdiag)",
-        ("udskit", "isotpkit", "gmdtcdb", "mode06kit"),
+        # vcikit added 2026-11-22: gmdiag's VciTransport path-depends on vcikit's RawBackend (gmdiag
+        # PR #7), native-VCX first with a J2534 fallback. The arrow is to the vcikit PROJECT only;
+        # gmdiag's Cargo.toml also path-deps the vcikit-j2534 member crate, but member crates of the
+        # vcikit workspace are not separate registered projects, so they are not arrows (an arrow to an
+        # unregistered name dangles). This mirrors piv-card -> cardkit, where piv-card path-deps
+        # cardkit's member crates but the arrow is piv-card -> cardkit.
+        ("udskit", "isotpkit", "gmdtcdb", "mode06kit", "vcikit"),
+    ),
+    # vcikit is the one vehicle crate the owner sequenced into the tiered flow (2026-11-22): tier 4
+    # (hold - narrow audience, a vehicle-diagnostics seam), wave 5 (the rest, one at a time), mirroring
+    # miblang (4, 5). Its siblings above stay untiered (0, 0) by the owner's decision; this is the
+    # deliberate exception, not a new default. No hard dependency arrow: the built SAE J2534 backend
+    # delivers behaviour standalone (registry discovery + the J2534-1 ISO 15765 API). The native-VCX
+    # backend is exposed but unimplemented, blocked on vcxtoolkit's raw-mode channel bring-up - an
+    # internal future backend, not a delivery blocker, so it is not an arrow.
+    "vcikit": (
+        "Library",
+        4,
+        5,
+        "vcikit",
+        "a transport-agnostic VCI raw-mode layer: the 4-byte CAN-id-prefixed PDU convention (ISO 22900-2 s9.2.6.3.6), the link config, and a RawBackend seam with a built SAE J2534 pass-through backend (registry discovery under PassThruSupport.04.04 + the J2534-1 ISO 15765 API) and a planned native-VCX backend; the seam gmdiag drives, owning no UDS or dongle-frame logic",
+        "PORTFOLIO.md s3 and s4 (registered and shelled 2026-11-22; J2534 backend built; sequenced tier 4 / wave 5 at the owner's instruction 2026-11-22; https://github.com/b1tninja-labs/vcikit)",
+        (),
     ),
     "gattmirror": (
         "Library",
