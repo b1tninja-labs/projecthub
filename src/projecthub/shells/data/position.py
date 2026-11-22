@@ -12,12 +12,12 @@ POSITION = {
     # Tier 1, wave 1: the chokepoint itself.
     "rpkit": (1, 1, ("asn1core", "pkix", "signeddata", "sigwire")),
     # Tier 2, wave 2: the certificate cluster.
-    "ctspy": (2, 2, ("asn1core",)),
-    "pkix": (2, 2, ("asn1core",)),
-    "revokekit": (2, 2, ("asn1core", "pkix")),
+    "ctspy": (2, 2, ("asn1core", "sigwire")),
+    "pkix": (2, 2, ("asn1core", "idnawire", "sigwire")),
+    "revokekit": (2, 2, ("asn1core", "pkix", "sigwire")),
     # Tier 2, wave 2: the routing-security cluster, anchored on rpkit.
     "rtrkit": (2, 2, ("rpkit",)),
-    "routevalid": (2, 2, ("rpkit", "rtrkit", "pathattr")),
+    "routevalid": (2, 2, ("rpkit", "rtrkit", "pathattr", "bgpfeed", "bmpkit")),
     # Tier 2, wave 4: naming and address allocation.
     "dnssd-srp": (2, 4, ("namespy",)),
     "leasespy": (2, 4, ()),
@@ -29,19 +29,19 @@ POSITION = {
     "rpslkit": (3, 3, ()),
     "bmpkit": (3, 3, ("pathattr",)),
     "pathattr": (3, 3, ()),
-    "lgc": (3, 5, ()),
+    "lgc": (3, 5, ("pathattr",)),
     "turnkit": (3, 5, ()),
-    "ohttp": (3, 5, ()),
-    "h3tunnel": (3, 5, ()),
+    "ohttp": (3, 5, ("namespy",)),
+    "h3tunnel": (3, 5, ("sfields",)),
     "sfields": (3, 5, ()),
     "syslogkit": (3, 5, ()),
     # Tier 3, wave 2: certificate-shaped, so gated on the substrate.
-    "signeddata": (3, 2, ("asn1core",)),
+    "signeddata": (3, 2, ("asn1core", "pkix", "sigwire")),
     # Tier 4, wave 5: the rest, in tier order, one at a time.
     "ntspy": (4, 5, ()),
     "tacacs": (4, 5, ()),
-    "pgpenv": (4, 5, ("asn1core",)),
-    "enrollkit": (4, 5, ("asn1core", "pkix", "signeddata")),
+    "pgpenv": (4, 5, ("asn1core", "sigwire")),
+    "enrollkit": (4, 5, ("asn1core", "pkix", "signeddata", "sigwire")),
     "shaken": (4, 5, ("asn1core", "pkix")),
     "srtpkit": (4, 5, ()),
     "cwmp": (4, 5, ("devicespy",)),
@@ -87,7 +87,9 @@ DEPENDS_WHY = {
     ): "a signed certificate timestamp and a Merkle leaf are verified "
     "over encoded bytes, so an inclusion proof is only as good as "
     "a codec that keeps the original bytes instead of re-encoding "
-    "them",
+    "them. This is a semantic edge that PORTFOLIO.md section 6 draws and "
+    "ctspy's pyproject does not declare: its strict certificate splitter "
+    "(certscan) is its own and imports nothing from asn1core yet",
     (
         "pkix",
         "asn1core",
@@ -146,13 +148,17 @@ DEPENDS_WHY = {
         "pkix",
     ): "an issued certificate is only useful once it validates to a "
     "trust anchor, and that verdict belongs to pkix rather than "
-    "being restated at the end of an enrollment flow",
+    "being restated at the end of an enrollment flow. This is a design "
+    "boundary the caller composes, not an import: enrollkit's pyproject "
+    "does not declare pkix and the code says it does not depend on it",
     (
         "pgpenv",
         "asn1core",
     ): "OpenPGP bindings reach X.509 identities through encoded key "
     "material, and pgpenv is scoped to packets and keys, so "
-    "reading the DER under a key belongs to asn1core",
+    "reading the DER under a key belongs to asn1core. This is a semantic "
+    "edge PORTFOLIO.md section 6 draws and pgpenv's pyproject does not "
+    "declare: no pgpenv module imports asn1core yet",
     ("shaken", "asn1core"): "a PASSporT is only as trustworthy as the certificate the "
     "originating provider publishes at its x5u, and parsing that "
     "certificate is asn1core's job, not shaken's",
@@ -202,8 +208,51 @@ DEPENDS_WHY = {
     ("shaken", "pkix"): "a SHAKEN certificate is accepted only once it validates to a "
     "trust anchor, which is pkix's path validation, and its extensions are "
     "decoded there too",
+    # Edges added in round 10 (2026-11-13), each declared by the consumer's pyproject.
+    (
+        "pkix",
+        "idnawire",
+    ): "RFC 9598 section 5 requires email domains to be put in A-label "
+    "form before they are compared, and IDNA 2008 conversion has one home in the "
+    "portfolio, idnawire",
+    ("signeddata", "pkix"): "a SignedData signer's certificate chain is validated by "
+    "pkix, which signeddata's verify and chain extras compose rather than rewrite",
     ("cwmp", "devicespy"): "both parse XML written by a stranger, and the one hardened "
     "XML reader (xmlsafe) lives in devicespy, which cwmp uses by sibling path",
+    # Edges added in round 12 (2026-11-13) by `edgecheck.py`: each is declared in the consumer's pyproject.toml,
+    # as a runtime dependency or as an extra, and is not a test-only path.
+    ("ctspy", "sigwire"): "its one runtime dependency is sigwire[verify], the strict "
+    "seam over cryptography that now holds the ECDSA verifier ctspy used to keep",
+    (
+        "pkix",
+        "sigwire",
+    ): "a certificate's signature is verified through sigwire[verify], "
+    "the one strict seam over cryptography, and pkix keeps no verifier of its own",
+    (
+        "revokekit",
+        "sigwire",
+    ): "a CRL or an OCSP response is signed, and sigwire[verify] "
+    "is the one seam that checks that signature",
+    ("pgpenv", "sigwire"): "an OpenPGP signature is checked through sigwire[verify], "
+    "and pgpenv parses the packets without keeping a verifier",
+    ("enrollkit", "sigwire"): "a CMP signature protection is checked through "
+    "sigwire.verify, the strict seam, rather than by a verifier of its own",
+    ("signeddata", "sigwire"): "the verify extra checks a SignedData signature through "
+    "sigwire[verify], which is why this edge is an extra and not a core dependency",
+    ("h3tunnel", "sfields"): "HTTP header and trailer values are Structured Field "
+    "Values, and sfields is the one parser, so h3tunnel declares it as a runtime dependency",
+    ("lgc", "pathattr"): "the codec extra is where looking glass output becomes BGP "
+    "objects, which pathattr decodes; the extra is declared and no module imports it yet",
+    ("ohttp", "namespy"): "the dns extra is where the key configuration and gateway "
+    "names are resolved, which is namespy's resolver; the extra is declared and no "
+    "module imports it yet",
+    ("routevalid", "bgpfeed"): "the feeds extra is where observed AS paths come from a "
+    "BGP feed, which bgpfeed supplies; it is an extra, not a core dependency",
+    (
+        "routevalid",
+        "bmpkit",
+    ): "the feeds extra is where observed AS paths come from BMP "
+    "monitoring, which bmpkit decodes; it is an extra, not a core dependency",
 }
 
 

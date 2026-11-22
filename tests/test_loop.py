@@ -381,10 +381,13 @@ def test_blockings_reads_the_real_dependency_graph():
     if not (root / "pkix" / "docs" / "plan.md").is_file():
         pytest.skip("needs the D:/code workspace with pkix checked out")
     hard, notes = loop.blockings(root, "pkix")
-    assert [(e.project, e.dependency) for e in deps.edges(root, "pkix")] == [
-        ("pkix", "asn1core")
-    ], "this test is only worth anything if pkix still has an edge to walk"
-    assert hard == [], "asn1core is real code, so it must not withhold a pkix row"
+    edges = [(e.project, e.dependency) for e in deps.edges(root, "pkix")]
+    assert ("pkix", "asn1core") in edges, (
+        "this test is only worth anything if pkix still has an edge to walk"
+    )
+    assert hard == [], (
+        "pkix's dependencies are real code, so none may withhold a pkix row"
+    )
     assert notes == []
 
 

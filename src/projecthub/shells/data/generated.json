@@ -114,8 +114,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "ctspy": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "6252c80819f91c83b703ad1d62aa04f7150b44961f80ea6afe8f2fa534fd9e6a",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "81e8c86cbe98e505759ed64f8006a788d13f1275d0882008300f87f3af22ed1a",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".gitignore": "bc03c79082bd574a5131954d59b240dc997a1ce77314585fc083de859975ff5c",
   "CONTRIBUTING.md": "169f9d94a91b253a67978d4cde6639bdaccec94f9e997c7c6e8692118c0f56c4",
@@ -131,7 +131,7 @@
   "ctspy/policy.py": "72d32296e9267c4716b9c1762f5d26080aff082fda9730743419f56770e6f65a",
   "ctspy/py.typed": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "ctspy/tiles.py": "b82bcba266011d12ac7dd726ba6848224976e61c8aba8bdc1ecadbea52e7fdb7",
-  "docs/plan.md": "1805707e5938bd05cec409fdd484d6b1c5b5bb2d96514b619c025875d05bcbad",
+  "docs/plan.md": "cd580eef277959d6d88f16abc8b64206249bf5d7cf96cc8fce1eb98ba9cec14c",
   "docs/research.md": "285924dedbfa841694eaddb745b25eee5992b783333239d60afe77cf6056e048",
   "docs/rfc-map.md": "8603a3795ea40042ea59fc842a9721bbc1df383531afcf59b1fefa9ecfde715e",
   "docs/strategy.md": "fb893b399e00af7f681d1d3163e7f8177ceae33a360c92681573e7ba5cabeecd",
@@ -258,8 +258,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "enrollkit": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "0e1193ff6a6dc57a5ec06d125ecd27da6e2a6d4d4d6dd71fa723cd2857256b1e",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "de6878852d6ca8fc33bd76227beeb3ff1428d93e937517d4eef6f42bb7efa573",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "4158b5b560a8066ec9cfa5cf20fe23e413a4b76a59e08e5aba4607d112516321",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -297,8 +297,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "h3tunnel": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "d6cf561417b843d0b2e92cbe9ddb15bddbe918c5fbb3aacb81cce5832931399f",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "9f12c6f473abb07d5a3970977e8f5af955642a54dc02d5334e8fddb85239bc85",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "53877ee1e9eb0a5c86fb7ddf1d5242e9d78d5b03088b60ed44561c44008681d5",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -379,8 +379,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "lgc": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "258dc321e0e0e57a6e06d169a72665362a375c321fdac42b1be270e77061c24d",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "0d7d75deeac1d414d5bbfea6c97b78d65d22c20b0ba8d8adfd694b4c5546789f",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "d4336ef79a1d6610951edced130e2792653d80f41f055afafdbce299f685a5cd",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -496,8 +496,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "ohttp": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "e91b079a83e9771a6c61cb1ac369c315c105fc3b522cf43f4826ed70f855a37c",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "4c36c4d672f95a1aade97cd4e5a84ff94dddda6a8c35e2e87df27c8a25fffa16",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "029d303b3595eece8109866f2556674e38f440a3a38ab624628b3d7160cd299c",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -575,8 +575,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "pgpenv": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "5fb0d4fe8a483d2be094fc77ea5f5d5feeb40cfaebb5cd27dfa87dac59180e04",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "af96888f4d3e17d9dc0cfc79e24f1232ebd55a438c7e0954c3069e405773483b",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "4582dbd6b3f7d18600da4162789b8e668b4e31333f2ba3ab13c172375a57b1ae",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -590,7 +590,7 @@
   "ROADMAP.md": "c8cb98b9f72d25d3031c015125f5bdf10cb59fe6f55480e5a706916ad02f2c17",
   "SECURITY.md": "fba2f6d53fce9867936edfb38e060cce7b5a9deddd4fff0d993ec842e5b27cf7",
   "conftest.py": "4d52a6d7f29ee55dfc4e4dc60380ecdb3ae5456aabd8239219bfd05beb116ea6",
-  "docs/plan.md": "4d45b1c4db0fd196a24c30035eb4c1fe7dfff08dbf4fdf6756deb60d59522a35",
+  "docs/plan.md": "37c553f7f44c7faae62f04149df022c361a039d269f2ec8aa898679f766b7ae4",
   "docs/research.md": "4591756174c59eca608040fa2167d56e3bc45589125a0602a0358cc5f27b3e57",
   "docs/rfc-map.md": "46e970b21468a27e1511c6c794021b887bb86fdd195f8f2c12abe3242bd24cd5",
   "docs/strategy.md": "068612e23ec0df87fac9bd1959940e2ab722da7e8d5ab54a2ec72297e847f04f",
@@ -615,8 +615,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "pkix": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "32b4f59c95a5d0d42991399a47963176ea00d10afebcb21445f1c484363c26d3",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "962abe04319e1709d768c49659ac1a74b897801efac51cb5b280a21b2e890a8a",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".gitignore": "bc03c79082bd574a5131954d59b240dc997a1ce77314585fc083de859975ff5c",
   "CHANGELOG.md": "c59e4fd4152b78ae9ea072e993a849d188af5d5645fab5c16c64ba99e4c3433c",
@@ -625,7 +625,7 @@
   "NOTICE": "c456ab5904c5d0dcd71f553a704089e48863d8caa14568fbb706aae547a0b438",
   "SECURITY.md": "fba2f6d53fce9867936edfb38e060cce7b5a9deddd4fff0d993ec842e5b27cf7",
   "conftest.py": "4d52a6d7f29ee55dfc4e4dc60380ecdb3ae5456aabd8239219bfd05beb116ea6",
-  "docs/plan.md": "319f109978c5a0481d28a4dfd9d702df05b2596b0ce4a4152b9859ce96e90e4b",
+  "docs/plan.md": "f0b6288a84cb70e78c00148bc041798106bcf574013d7f52f3a6c89e8dd7ee27",
   "docs/research.md": "9784717e0072dbc38badd05d730dc8673fff08cda5f6cee695705d54d1dd1593",
   "docs/rfc-map.md": "db8bdc2f0b729b0495f19db3c072098d89f17bd5c21546120368f783cc2e9309",
   "docs/strategy.md": "f4b37cb9f01a21cbe6dd26b2cc8d3208796ac0aa2444b7fa26ded6c6cd3b9df5",
@@ -645,8 +645,8 @@
   "tools/check_dist.py": "de09af6cd011d8706765b63d38b25c9b61ec36b64bfc6cc90fbb46859c833723"
  },
  "revokekit": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "ecb3431f920dad82a069f1f390431da26115485c19f716cd8158de5ae8456204",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "7717e2729d03deec6d3bda202ea522ea2bf642a2d4fd2d54ac0a307dd5a56d0a",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "049c7c023eeca3c62ccc4edb956e6e45c634367bd61df9258e81e392f87ac8ce",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -660,7 +660,7 @@
   "ROADMAP.md": "6859996fffd2a1172f9e4da7b12778f5bef69616d9ed3d713f0b93dbaa69e4b9",
   "SECURITY.md": "fba2f6d53fce9867936edfb38e060cce7b5a9deddd4fff0d993ec842e5b27cf7",
   "conftest.py": "4d52a6d7f29ee55dfc4e4dc60380ecdb3ae5456aabd8239219bfd05beb116ea6",
-  "docs/plan.md": "193bc2a2c24e6de4a1e074f204d37d56eaca8bbd004f6574e5d2b6a1835f70aa",
+  "docs/plan.md": "b44db04fda76807169c8bcd3312fc60c918311866a884b8b96c2ce8078f0c7de",
   "docs/research.md": "605b563647c1b4cde7397920d9affa57922f6d74e9f4c78e7b7154f61cdf7881",
   "docs/rfc-map.md": "414399324d85c07d6fb9f8a7680440bce342dfd6a07b2b844cc97a0031cf9639",
   "docs/strategy.md": "013f2013daf0b204a7236e0309346d78d8051fa1af3d6abd0994b42a06fc1cc8",
@@ -685,8 +685,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "routevalid": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "3c4e57e9e8e64d6c0d1fc19cf21a67ec407bf6f42e8ce5224ecccce4ba8c599a",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "398175115c75664388e6e1e7a26a08f766a05e86642216ae72cf8fc05cea6565",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "60b5f034b1f96701509ff69df73174e40fa5f3d6bbee8b94482519ca7fa15361",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -700,7 +700,7 @@
   "ROADMAP.md": "1e9a167adeb0e7c4796e3f44a0353bab191c0e879e33fc70d8b744b2cdc4bdad",
   "SECURITY.md": "fba2f6d53fce9867936edfb38e060cce7b5a9deddd4fff0d993ec842e5b27cf7",
   "conftest.py": "4d52a6d7f29ee55dfc4e4dc60380ecdb3ae5456aabd8239219bfd05beb116ea6",
-  "docs/plan.md": "252f04e9680632a03f2f1c27ff0c35fce53fd3dddb1594c62d5ae3a19e78ebf8",
+  "docs/plan.md": "7da6ffcbc5fa0ebfbd81d17f6c72b179a9000f1aea9053d10bdde1e655f78970",
   "docs/research.md": "17228ec0d3186e39e3b04e8078a323dd0e2e980c7591348af59288316cb5b99b",
   "docs/rfc-map.md": "3303e79cc92ec524569626ee45fceb18cde8816a0136bfb05d79e1ca417044da",
   "docs/strategy.md": "b5227be5d36e8e22afde978f0e9dd00bc15240722719a264dcc4d7495377570e",
@@ -919,8 +919,8 @@
   "tools/write_freeze.py": "3b8a2d828f6180a947bcd007f73dbdb03c464644729a90552c105cac35833710"
  },
  "signeddata": {
-  ".cline/workflows/implement-obligation.md": "a574763433755f870c87e1f675f810ca5666150cb0d5299fa93acf226595288b",
-  ".clinerules/10-rfclib.md": "06edce76bc0e2d146451d2825de94aeb1a7573b97f6cec264b25acbe5a02c639",
+  ".cline/workflows/implement-obligation.md": "8d462e3141a560feb13da377472fd09122484c7f50d5862f95a2b9a32d8792b2",
+  ".clinerules/10-rfclib.md": "de6ae011483b4e914772cf0ded37d5a4f21adf42ce866ae324d22940404a0f86",
   ".gitattributes": "c9e6efa76d130b482554bd602b97a24eb7f6316f2613978f5161996b8045051b",
   ".github/workflows/ci.yml": "b75057f27a6f4d790237f9440854d31d8a9aa3e7659c8ad509fc299cfd730cf6",
   ".github/workflows/security.yml": "5946be0697f74a139551af340ff13c8ea688728a90594ac2a8a5af79061c5a69",
@@ -934,7 +934,7 @@
   "ROADMAP.md": "cd7687f089ce4025410ee5ca31b2f7c9ebdc0cad41c401ef0b49670fd12e62ac",
   "SECURITY.md": "fba2f6d53fce9867936edfb38e060cce7b5a9deddd4fff0d993ec842e5b27cf7",
   "conftest.py": "4d52a6d7f29ee55dfc4e4dc60380ecdb3ae5456aabd8239219bfd05beb116ea6",
-  "docs/plan.md": "3fb58250e0b06b5772ec85ffc76c3bc9f040817e96e829a9772f50c8214fcd74",
+  "docs/plan.md": "3faeeffafe781f9808dc127884ffe5a4c62474a3388904eb4a2911b0be8fa747",
   "docs/research.md": "9767ab3efaa819030bff4bf531395f43cfeef591d687a775d6213e138e9087f0",
   "docs/rfc-map.md": "61f2fed118b6f5527199f972d7cd7bdb9005f0d590bcda0c925de21f7a6715b0",
   "docs/strategy.md": "b54b31edb011c111ba213c054aab7a56fdd1543f468b60461fc7c0f3c6e43411",

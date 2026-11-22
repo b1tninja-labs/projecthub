@@ -293,6 +293,55 @@ class ProjectClaims:
             and not (ended is not None and ended(str(i.values.get("Agent"))))
         ]
 
+    def activate(self, project: str, row_id: str = "") -> bool:
+        """Mark `project`'s Project-level item Active, because a lease on one of its rows is the owner's
+        decision that the project carries effort now. Returns True when this call wrote the field, False when
+        it was Active already. Refuses NO_PROJECT_ITEM when the board has no single card for the project, and
+        ACTIVATE_FAILED when the write did not stand; nothing is claimed in either case.
+
+        With `row_id`, the row's item is found and checked claimable on the cached board first (NO_ITEM,
+        AMBIGUOUS, LEASE_HELD, NOT_CLAIMABLE), so a claim that is bound to fail never activates its project:
+        rows not yet on the board once turned four projects Active with no lease to show for it."""
+        if self.client is None:
+            raise self._offline(self.offline_reason or "no GitHub client")
+        if row_id:
+            target = self.find(project, row_id)
+            if not claimable(target, self.clock()):
+                raise self._refusal(target)
+        client = self.client
+        items = self._guard(lambda: self.cache.items(client, self.owner, self.number))
+        cards = [
+            i
+            for i in items
+            if i.values.get("Level") == "Project"
+            and i.title.split(":", 1)[0].strip() == project
+        ]
+        if len(cards) != 1:
+            raise self._error(
+                "NO_PROJECT_ITEM",
+                f"{len(cards)} Project-level items are titled {project} on {config.BOARD_URL}; "
+                "cannot mark it Active",
+            )
+        card = cards[0]
+        if card.values.get("Active") == "Active":
+            return False
+        try:
+            self.budget.require_write("activate")
+        except BudgetLow as error:
+            raise self._error("RATE_BUDGET_LOW", str(error)) from error
+        board = self.project()
+        self._pacing().take(1)
+        outcomes = self._guard(
+            lambda: client.set_values(board, [Change(card.id, "Active", "Active")])
+        )
+        after = self._guard(lambda: client.item(card.id))
+        self.cache.patch(self.owner, self.number, after)
+        failed = [o for o in outcomes if not o.ok]
+        if failed or after.values.get("Active") != "Active":
+            why = failed[0].error if failed else "the re-read is not Active"
+            raise self._error("ACTIVATE_FAILED", f"{project}: {why}")
+        return True
+
     # -- claim -------------------------------------------------------------------------------------
 
     def acquire(

@@ -561,7 +561,7 @@ def test_acquire_takes_a_branch_over_mcp_and_the_command_line(
     path = tmp_path / "cli.sqlite"
     monkeypatch.setenv("PROJECTHUB_LEASES_DB", str(path))
     monkeypatch.setattr(
-        L, "_ready_from_planner", lambda p, r: "" if r == "a.b" else "not ready"
+        L, "_ready_from_planner", lambda p, r, **_: "" if r == "a.b" else "not ready"
     )
     cli_board = fb.FakeBoard(fb.item("[pkix] a.b: x", Status="Ready"))
     monkeypatch.setattr(L, "board_client", lambda: (cli_board, ""))

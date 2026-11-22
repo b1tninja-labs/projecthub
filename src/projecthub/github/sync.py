@@ -67,6 +67,9 @@ STATUSES = {
     "[part]": ("status:partial", "open"),
     "[ ]": ("status:unimplemented", "open"),
     "[no]": ("type:non-goal", "open"),
+    # The Rust repositories' vocabulary (roadmap.STATES): `[unread]` is unfinished, never done.
+    "[open]": ("status:unimplemented", "open"),
+    "[unread]": ("status:partial", "open"),
 }
 LABELS = {
     "status:unimplemented": ("#ededed", "row reads [ ]"),
@@ -78,7 +81,10 @@ LABELS = {
     "type:non-goal": ("#c5def5", "row reads [no]; deliberate non-goal"),
 }
 # A read that returns exactly this many items may have been cut off, and is refused rather than trusted.
-ISSUE_LIMIT = 1000
+# gh paginates `issue list` itself up to --limit. 1000 was outgrown on 2026-11-14 when b1tninja-labs/portfolio
+# passed #1026 and every board and sync run refused; the guard below still refuses a list that reaches it.
+ISSUE_LIMIT = 10_000
+TITLE_MAX = 256  # GitHub's limit on an issue title
 # Every roadmap issue lives in one repository, so the portfolio is read in one place (PORTFOLIO.md decision 11).
 # A project's issues are the ones whose title starts with `[project]`. Set PROJECTHUB_ISSUE_REPO empty for the
 # old layout, one repository per project.
@@ -317,6 +323,9 @@ class Target:
     directory: pathlib.Path
     matrix: pathlib.Path | None
     repo: str
+    files: tuple[
+        pathlib.Path, ...
+    ] = ()  # every file holding rows: more than `matrix` for fragments
 
 
 def resolve(
@@ -334,13 +343,17 @@ def resolve(
     directory = roadmap.project_dir(root, name)
     repo = remote(root, directory.name) if directory.is_dir() else ""
     return Target(
-        name, directory, roadmap.matrix_path(root, name), repo or f"{org}/{name}"
+        name,
+        directory,
+        roadmap.matrix_path(root, name),
+        repo or f"{org}/{name}",
+        tuple(roadmap.matrix_files(root, name)),
     )
 
 
 def default_projects() -> list[str]:
-    """The shells verify.py gates plus the hand-owned matrices D19 syncs, each once."""
-    return list(dict.fromkeys([*PROJECTS, *roadmap.HAND_OWNED]))
+    """The shells verify.py gates plus the hand-owned matrices D19 syncs and the Rust repositories, each once."""
+    return list(dict.fromkeys([*PROJECTS, *roadmap.HAND_OWNED, *roadmap.RUST_OWNED]))
 
 
 # ---------------------------------------------------------------------------------------------- writes
@@ -419,13 +432,30 @@ def placement(row: dict[str, str], ladder: dict[str, str]) -> str:
     return rowdoc.milestone_title(key, ladder) if key in ladder else ""
 
 
-def roadmap_url(repo: str) -> str:
-    return f"https://github.com/{repo}/blob/HEAD/ROADMAP.md"
+def roadmap_url(repo: str, file: str = "ROADMAP.md") -> str:
+    return f"https://github.com/{repo}/blob/HEAD/{file}"
+
+
+def is_rust(row: dict[str, str]) -> bool:
+    """Whether the row came from a `Status | Obligation | Anchor | Test` table (the Rust repositories)."""
+    return bool(row.get("obligation"))
+
+
+RUST_GATES = (
+    "- Gates before a PR: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`,",
+    "  and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`. A row is `[ok]` only after the named test",
+    "  has been seen to fail with the behaviour deliberately broken, and the break is recorded in its Test cell.",
+)
+PYTHON_GATES = (
+    "- Gates before a PR: ruff check, ruff format --check, mypy, pytest with coverage, and the same",
+    "  suite under `python -O`, because an obligation pinned only inside an `assert` is not pinned.",
+)
 
 
 def body(row: dict[str, str], milestone: str, detail: str = "") -> str:
     """The issue text: which repo and why, what to build, what proves it, and what closes it."""
     lines = [MARKER.format(row["name"]), ""]
+    file = row.get("file") or "ROADMAP.md"
     if detail:
         lines += [detail, ""]
     else:
@@ -433,7 +463,7 @@ def body(row: dict[str, str], milestone: str, detail: str = "") -> str:
             f"Spec: {row['spec']}",
             f"Milestone: {milestone or '(none cited by the row)'}",
             f"Named test: {row['where']}",
-            f"Row status in `ROADMAP.md`: `{row['status']}`",
+            f"Row status in `{file}`: `{row['status']}`",
         ]
         if row["evidence"]:
             lines.append(f"Evidence recorded in the row: {row['evidence']}")
@@ -441,7 +471,7 @@ def body(row: dict[str, str], milestone: str, detail: str = "") -> str:
     lines += [
         "## What closes this",
         "",
-        "The `ROADMAP.md` row flips **in the same commit** as the code, and only when the named test",
+        f"The `{file}` row flips **in the same commit** as the code, and only when the named test",
         "would fail if the behaviour regressed. A row that reads done because the code looks right is the",
         "failure this portfolio exists to avoid, so this issue is not closed by a passing build.",
         "",
@@ -453,8 +483,7 @@ def body(row: dict[str, str], milestone: str, detail: str = "") -> str:
         "- Check the errata for anything cited here; a verified erratum changes the answer.",
         "- No silent empty values. Refuse loudly rather than return an empty collection.",
         "- Claim it by assigning yourself before starting, so two agents do not collide.",
-        "- Gates before a PR: ruff check, ruff format --check, mypy, pytest with coverage, and the same",
-        "  suite under `python -O`, because an obligation pinned only inside an `assert` is not pinned.",
+        *(RUST_GATES if is_rust(row) else PYTHON_GATES),
         "",
         "</details>",
         "",
@@ -472,6 +501,8 @@ def detail_of(
     ladder: dict[str, str],
 ) -> tuple[str, str]:
     """(title summary, body section) built from the project's own files. Nothing here is invented."""
+    if is_rust(row):
+        return "", detail_of_rust(name, repo, row, root)
     stub = rowdoc.stub_of(root, name, row["name"])
     blurb = rowdoc.project_blurb(root, name)
     milestone = row["milestone"]
@@ -535,11 +566,69 @@ def detail_of(
     return rowdoc.short_summary(stub), "\n".join(lines)
 
 
+def detail_of_rust(
+    name: str, repo: str, row: dict[str, str], root: pathlib.Path
+) -> str:
+    """The body section for a row of a Rust repository: its own cells, and what projecthub did not check.
+
+    The Test cell is shown as written. projecthub reads Python tests only, so it cannot say a Rust test
+    exists, and this text says so instead of reporting a Python-shaped "does not exist yet".
+    """
+    file = row.get("file") or "ROADMAP.md"
+    blurb = rowdoc.project_blurb(root, name)
+    lines = [
+        f"**Repository:** [`{repo}`](https://github.com/{repo})  |  **File:** `{file}`",
+        "",
+        "## What this is",
+        "",
+    ]
+    if blurb:
+        lines += [f"`{name}`: {blurb}", ""]
+    lines += [row["obligation"], ""]
+    lines += ["## What is needed", ""]
+    if row["status"] == "[unread]":
+        lines += [
+            "Implemented and its test passes, but the anchor could not be read cleanly from the standard. "
+            "Read the cited text, confirm or correct the anchor, and record what was read.",
+            "",
+        ]
+    lines += [f"Behaviour is defined by: **{row['spec'] or 'none cited'}**.", ""]
+    noted = f" ({row['status_note']})" if row["status_note"] else ""
+    lines += [
+        "## Done when",
+        "",
+        f"- Test cell, as written: {row['where'] or '(empty)'}. Not checked by projecthub, which reads Python tests only.",
+        f"- The row in [{file}]({roadmap_url(repo, file)}) flips from `{row['status']}`{noted} to `[ok]`, "
+        "with a named test that was seen to fail when the code was deliberately broken.",
+        "",
+    ]
+    dependencies = rowdoc.dependency_lines(root, name)
+    if dependencies:
+        lines += ["## Depends on (state read from the workspace)", ""]
+        lines += [f"- {d}" for d in dependencies]
+        lines += [
+            "",
+            "A dependency existing does not mean it provides what this row needs; check the capability.",
+            "",
+        ]
+    return "\n".join(lines)
+
+
 def issue_title(name: str, row: dict[str, str], summary: str) -> str:
     """`[pkix] anchors.load_anchor(): trust anchor selection`. The repository is in the title because a
     board row drawn from many repositories is otherwise anonymous."""
-    tail = summary or row["spec"]
-    return f"[{name}] {row['title']}: {tail}" if tail else f"[{name}] {row['title']}"
+    tail = "" if is_rust(row) else summary or row["spec"]
+    head = f"[{name}] {row['title']}"
+    if not tail:
+        return head
+    # GitHub refuses a title over 256 characters ("Title is too long"), which once left pkix's
+    # tests.asn1core_build with no issue at all. Only the tail is cut, so "[project] row" (what items are found
+    # by) survives whole, and the cut is deterministic, so a re-run compares equal and reports no drift.
+    full = f"{head}: {tail}"
+    if len(full) <= TITLE_MAX:
+        return full
+    room = TITLE_MAX - len(head) - len(": ") - len("…")
+    return f"{head}: {tail[: max(0, room)].rstrip()}…" if room > 0 else head[:TITLE_MAX]
 
 
 def same_text(a: str, b: str) -> bool:
@@ -614,22 +703,24 @@ def sync_one(
     check: bool,
     root: pathlib.Path,
     matrix: pathlib.Path | None = None,
+    files: tuple[pathlib.Path, ...] | None = None,
 ) -> int:
     """One project: file what is missing, bring open issues up to date, close what is done, report drift.
 
     Returns the number of problems: drift items under --check, and 1 for a read that failed otherwise.
     """
-    path = matrix or roadmap.matrix_path(root, name)
-    if path is None or not path.is_file():
+    if files is None:
+        # One file, as before, unless the project keeps fragments: then the matrix file and every fragment.
+        files = (matrix,) if matrix else tuple(roadmap.matrix_files(root, name))
+    if not files or not all(f.is_file() for f in files):
         print(
             f"{name}: no obligation matrix ({', '.join(roadmap.MATRIX_FILES)}), skipped"
         )
         return 0
-    text = path.read_text(encoding="utf-8")
-    parsed = roadmap.parse(text)
+    parsed, text = roadmap.read_matrices(root, name, list(files))
     rows = [row for row in parsed.rows if row["name"]]
     broken = [
-        f"{path.name}:{p.line} looks like a row but does not parse: {p.reason}"
+        f"{p.file or files[0].name}:{p.line} looks like a row but does not parse: {p.reason}"
         for p in parsed.problems
     ]
     for line in broken:
@@ -637,13 +728,13 @@ def sync_one(
     if not rows:
         print(f"{name}: prose plan, no obligation matrix; nothing filed")
         return len(broken) if check else 0
-    # Plan and apply skip a project with no repository, because the first write against it would end the
-    # whole run. --check does not skip: a project whose issues cannot be read is not "in sync", and a gate
-    # that quietly passes on an unreachable repository reports green for the wrong reason.
-    if not check and not repo_exists(repo):
-        print(f"{name}: no GitHub repository {repo}; skipped (create it, then re-run)")
-        return 0
+    # Issues are filed in the shared portfolio repository when one is configured. A plan
+    # directory has no repository of its own, and that must not keep its rows off the board.
+    # --check does not skip: a project whose issues cannot be read is not "in sync".
     home = issue_home(repo)
+    if not check and not repo_exists(home):
+        print(f"{name}: no GitHub repository {home}; skipped (create it, then re-run)")
+        return 0
     ladder = (
         roadmap.ladder_for(root, name)
         if name in roadmap.LADDERS
@@ -844,7 +935,13 @@ def main(argv: list[str] | None = None) -> int:
         target = resolve(root, name, args.org)
         try:
             total += sync_one(
-                target.name, target.repo, args.apply, args.check, root, target.matrix
+                target.name,
+                target.repo,
+                args.apply,
+                args.check,
+                root,
+                target.matrix,
+                target.files or None,
             )
         except BudgetExhausted as error:
             print(

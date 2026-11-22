@@ -19,7 +19,8 @@ an open decision from PORTFOLIO.md section 9 that names it. Field values come fr
 PORTFOLIO.md, the shells' POSITION table and the disk.
 
 What it never does. It does not move Status forward: Ready, In progress, In review and Blocked are a
-person's or an agent's call, and Active (the two-project rule) is never written by code. It does not invent
+person's or an agent's call, and Active (the two-project rule) is never written by this sync: the only writer
+is a lease (`ProjectClaims.activate`), because claiming a row is the decision that its project carries effort. It does not invent
 dates, estimates or milestones. It deletes nothing.
 
 The board is chosen by number, never by title: two open boards once shared the title, and a lookup by
@@ -60,7 +61,9 @@ OWNER = config.PROJECT_OWNER
 PORTFOLIO_REPO = config.PORTFOLIO_REPO
 # There is one board. Configured in config.py and PROJECTHUB_BOARD, never looked up by title.
 BOARD_NUMBER = int(paths.env("BOARD") or config.PROJECT_NUMBER)
-ISSUE_LIMIT = 1000
+# gh paginates `issue list` itself up to --limit. 1000 was outgrown on 2026-11-14 when b1tninja-labs/portfolio
+# passed #1026 and every board and sync run refused; the guard below still refuses a list that reaches it.
+ISSUE_LIMIT = 10_000
 
 STATUS = [
     (
@@ -942,6 +945,16 @@ def active_items(items: Iterable[Item]) -> list[str]:
     ]
 
 
+# GitHub does not document a Projects text field's maximum; values over a thousand characters were refused on
+# 2026-11-14, so the board keeps well under that.
+TEXT_MAX = 900
+
+
+def clip(value: str, limit: int = TEXT_MAX) -> str:
+    """`value` cut to `limit` characters with a trailing "…", unchanged when it fits."""
+    return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
+
+
 def row_values(
     row: dict[str, str], tier: int, wave: int, node: str = ""
 ) -> dict[str, object]:
@@ -952,12 +965,16 @@ def row_values(
     GitHub rejected every one of trustatlas's long rows with "Column value must be a valid value for text
     column", so `--apply` failed its writes and `--check` reported the same six differences forever. A board
     field is a pointer to evidence, not a copy of it.
+
+    Spec is clipped for the same reason: pkix's anchors.anchor_name_constraints and cab.member carry Spec
+    cells over a thousand characters, GitHub refused them with the same message, and every `--apply` rewrote
+    the same values while `--check` kept reporting them. The clip is deterministic, so a re-run compares equal.
     """
     done = STATUSES.get(row["status"], ("", "open"))[1] == "close"
     return {
         "Level": "Obligation",
-        "Spec": row["spec"],
-        "Named test": node,
+        "Spec": clip(row["spec"]),
+        "Named test": clip(node),
         "Priority": priority(tier),
         "Wave": f"Wave {wave}" if wave else "",
         "Status": "Done" if done else "Backlog",
@@ -1050,8 +1067,11 @@ def build(board: Board, only: set[str] | None) -> None:
         )
         rows_by[entry.name] = rows
         row_issues: dict[str, Issue] = {}
-        if state.repo and rows:
-            for issue in board.issues(issue_home(state.repo)):
+        # A plan directory has no repository. Its rows are filed in the shared portfolio
+        # repository, and the board still has to place them.
+        filing = state.repo or (issue_home("") if shared() else "")
+        if filing and rows:
+            for issue in board.issues(issue_home(filing)):
                 if not owned_by(issue.title, entry.name):
                     continue
                 found_row = ROW_MARKER.search(issue.body)
@@ -1151,7 +1171,8 @@ def build(board: Board, only: set[str] | None) -> None:
             links_by[entry.name],
         )
         parent = project_issues.get(entry.name)
-        if not (in_scope(entry.name) and state.repo and rows and row_issues and parent):
+        filing = state.repo or (issue_home("") if shared() else "")
+        if not (in_scope(entry.name) and filing and rows and row_issues and parent):
             continue
         # The same ladder the sync reads, so an epic never names a milestone the sync did not create (a
         # certledger "phase 0" epic once asked GitHub for a milestone that did not exist and stopped the run).

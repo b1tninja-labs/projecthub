@@ -117,7 +117,29 @@ def test_head_tests_on_base_fail_then_pass_on_head_is_accepted(repo):
     assert record["ok"] is True
 
 
-def test_a_test_that_already_passes_on_base_is_rejected(repo):
+def test_a_test_that_already_passes_on_base_stands_on_l4_even_when_the_commit_changes_source(
+    repo,
+):
+    root, base = repo
+    _commit(root, {"demo/core.py": REAL}, "the code lands without its row")
+    _flip(
+        root,
+        "from demo import double\n\ndef test_double():\n    assert double(1) == 2\n",
+        source=REAL + "\n# touched\n",
+    )
+    (row,) = E.check(root, "demo", base_ref="HEAD~1")["rows"]
+    assert row["l3"]["pre_existing"] is True and row["l3"]["changes_source"] is True
+    assert row["l4"]["ok"] is True and row["ok"] is True, row
+    (off,) = E.check(root, "demo", base_ref="HEAD~1", mutate=False)["rows"]
+    assert (
+        off["ok"] is False
+        and "already passes on base" in off["l3"]["tried"][0]["reason"]
+    )
+
+
+def test_behaviour_that_predates_the_commit_passes_only_through_l4(repo):
+    """pkix's chain.issuer_binding: the code was already there and the commit adds only the test and the row.
+    A differential cannot fail on base, so the row stands on L4: its test must kill a mutant of the function."""
     root, base = repo
     _commit(root, {"demo/core.py": REAL}, "the code lands without its row")
     _flip(
@@ -125,8 +147,10 @@ def test_a_test_that_already_passes_on_base_is_rejected(repo):
         "from demo import double\n\ndef test_double():\n    assert double(1) == 2\n",
     )
     (row,) = E.check(root, "demo", base_ref="HEAD~1")["rows"]
-    assert row["ok"] is False
-    assert "already passes on base" in row["reason"]
+    assert row["l3"]["pre_existing"] is True
+    assert row["l4"]["ok"] is True and row["ok"] is True, row
+    (off,) = E.check(root, "demo", base_ref="HEAD~1", mutate=False)["rows"]
+    assert off["ok"] is False and "only L4" in off["reason"]
 
 
 def test_an_import_error_on_base_is_not_a_behavioural_failure(repo):
@@ -138,8 +162,11 @@ def test_an_import_error_on_base_is_not_a_behavioural_failure(repo):
     )
     _commit(root, {"demo/extra.py": "def triple(n):\n    return 3 * n\n"}, "extra")
     (row,) = E.check(root, "demo", base)["rows"]
+    # New code passes L3 as new_code and must then be proved by L4: this test never calls the row's function
+    # (core.double), so it kills none of its mutants and the row still fails.
     assert row["ok"] is False
-    assert "import error" in row["reason"], row
+    assert "import error" in row["l3"]["tried"][0]["reason"], row
+    assert row["l3"]["new_code"] is True and row["reason"].startswith("L4"), row
 
 
 def test_a_module_level_import_of_missing_code_is_a_collection_error_on_base(repo):
@@ -150,8 +177,9 @@ def test_a_module_level_import_of_missing_code_is_a_collection_error_on_base(rep
         "from demo.extra import triple\n\ndef test_double():\n    assert triple(1) == 3\n",
     )
     (row,) = E.check(root, "demo", base)["rows"]
-    assert row["ok"] is False and row["l3"]["base"]["outcome"] == "error"
-    assert "rather than fails" in row["reason"]
+    assert row["ok"] is False and row["l3"]["new_code"] is True
+    assert "rather than fails" in row["l3"]["tried"][0]["reason"]
+    assert row["reason"].startswith("L4"), row
 
 
 def test_no_flip_means_nothing_to_audit_and_unchanged_rows_are_not_rechecked(repo):

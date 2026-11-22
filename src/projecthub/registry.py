@@ -64,6 +64,9 @@ EXTRA: dict[
         "certledger",
         "independent CT acquisition and publication",
         "PORTFOLIO.md s4 Tier 1, s7 wave 1",
+        # pkix for cl.dane-topmost-signed-by (RFC 7671 s5.2.3 para 10); asn1core for I3; ctspy is a runtime
+        # dependency in its pyproject (round 12)
+        ("asn1core", "pkix", "ctspy"),
     ),
     "namespy": (
         "Library",
@@ -90,12 +93,134 @@ EXTRA: dict[
         "PORTFOLIO.md s4 Tier 5, s7 wave 4",
     ),
     "trustatlas": (
-        "Plan",
+        # Reclassified Plan -> Tooling by the owner on 2026-11-14: stdlib-only fetchers under tools/ with a test
+        # suite and a pyproject, so its rows can be leased. The web app stays unbuilt (PLAN.md's gating rule).
+        "Tooling",
         0,
         0,
         "trustatlas",
         "the trust-anchor supply chain, mapped",
-        "PORTFOLIO.md s5: deliberately unbuilt, after certledger's store",
+        "owner 2026-11-14: Tooling (fetchers and joins); PORTFOLIO.md s5 still holds the site unbuilt",
+        # asn1core, called by path (check_spki_artifact.py, host_reach.py), never imported: an edge all the same,
+        # and the one the evidence sandbox needs to extract beside trustatlas.
+        ("asn1core",),
+    ),
+    "winhive": (
+        "Plan",
+        0,
+        0,
+        "winhive",
+        "Windows registry hive files, read offline; Microsoft has published no specification of the file",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+    ),
+    "authroots": (
+        "Plan",
+        0,
+        0,
+        "authroots",
+        "certificate stores shipped in an official Windows image or cumulative update",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+        ("iso9660", "udfvol", "wimwire", "cabread", "pkix", "winhive"),
+    ),
+    "itrust": (
+        "Plan",
+        0,
+        0,
+        "itrust",
+        "certificate stores shipped in an official macOS or iOS restore image",
+        "PORTFOLIO.md s5, 2026-11-16; requested name, one keystroke from live trust and vtrust",
+        ("archivekit", "plistwire", "aeawire", "udifwire", "apfswire", "img4wire"),
+    ),
+    "iso9660": (
+        "Library",
+        0,
+        0,
+        "iso9660",
+        "ISO/IEC 9660 volume and file structure, from ECMA-119 5th edition",
+        "reader landed 2026-11-17 against the imported ECMA-119 5th edition; name free (snapshot 936266)",
+    ),
+    "plistwire": (
+        "Plan",
+        0,
+        0,
+        "plistwire",
+        "Apple property lists, XML from the published DTD and binary from Apple's encoder",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+    ),
+    "img4wire": (
+        "Plan",
+        0,
+        0,
+        "img4wire",
+        "IMG4, IM4P, and IM4M as DER values, with no Apple field specification found",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+        ("asn1core", "lzfsewire"),
+    ),
+    "lzfsewire": (
+        "Library",
+        0,
+        0,
+        "lzfsewire",
+        "LZFSE and LZVN block streams; raw and LZVN decode in Python and Rust",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+    ),
+    "apfswire": (
+        "Plan",
+        0,
+        0,
+        "apfswire",
+        "read-only Apple File System containers from Apple's reference",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+    ),
+    "udifwire": (
+        "Plan",
+        0,
+        0,
+        "udifwire",
+        "UDIF disk images; no Apple specification of the trailer was found",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+        ("plistwire", "archivekit", "lzfsewire"),
+    ),
+    "aeawire": (
+        "Plan",
+        0,
+        0,
+        "aeawire",
+        "Apple Encrypted Archive; no container layout was found",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+        ("lzfsewire",),
+    ),
+    "wimwire": (
+        "Library",
+        0,
+        0,
+        "wimwire",
+        "uncompressed Windows Imaging files, from Microsoft's format paper",
+        "PORTFOLIO.md s4, 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+    ),
+    "cabread": (
+        "Library",
+        0,
+        0,
+        "cabread",
+        "one cabinet, including MSZIP and LZX, and a member continued into the next cabinet",
+        "moved from pkix.cab on 2026-11-17; name free, no live one-keystroke neighbour (snapshot 936266)",
+    ),
+    "regfwire": (
+        "Plan",
+        0,
+        0,
+        "regfwire",
+        "not a second hive reader; the hive file is winhive",
+        "PORTFOLIO.md s4, 2026-11-17; name free, and the reader was placed under winhive",
+    ),
+    "udfvol": (
+        "Library",
+        0,
+        0,
+        "udfvol",
+        "ECMA-167 3rd edition volumes; the UDF revisions in ECMA TR/112 are not read yet",
+        "reader landed 2026-11-17 against the imported ECMA-167 3rd edition; name free (snapshot 936266)",
     ),
     "registrata": (
         "Library",
@@ -104,6 +229,8 @@ EXTRA: dict[
         "pyrwhois",
         "registration data: an RFC 2167 RWhois client and server, plus experimental WHOIS and RDAP behind one lookup model",
         "PORTFOLIO.md s3 (implemented, not yet sequenced into a tier)",
+        # idnawire for hosts.registrable-idna2008 (its only runtime dependency)
+        ("idnawire",),
     ),
     # Support libraries, created 2026-11-13 under PORTFOLIO.md s9 item 14 and s2's self-sufficiency principle:
     # untiered, unsequenced, outside the two-project rule. `sigprim` merged into `sigwire[verify]` (item 15).
@@ -122,7 +249,10 @@ EXTRA: dict[
         "sigwire",
         "lightweight signature formats, with strict verification (`sigwire[verify]`) over `cryptography`",
         "PORTFOLIO.md s4 support libraries; s9 item 15 (sigprim merged in)",
-        ("pgpenv",),
+        # No sibling. It carried ("pgpenv",) until round 12: sigwire's armor.py only names pgpenv as the package
+        # that owns OpenPGP parsing, it imports nothing from it, and pgpenv declares sigwire[verify], so the edge
+        # was stale and pointed the wrong way (a cycle with pgpenv's own).
+        (),
     ),
     "gitobj": (
         "Library",
@@ -140,7 +270,10 @@ EXTRA: dict[
         "pkgformats",
         "package formats in strict layers: deb, rpm, pacman, apk, xbps, ipk, nix, Gentoo, with PKGBUILD reading",
         "PORTFOLIO.md s4 support libraries; s9 item 15 (owner of the PKGBUILD reader)",
-        ("archivekit", "sigwire", "pgpenv"),
+        # sigwire is kept as the planned consumer of signature facts (row pf.sig.swap, "M4 adapter swap"), not an
+        # import. pgpenv was dropped in round 12: pf.rpm.issuer says the OpenPGP packet fields belong to sigwire,
+        # and pacmandb.py only mentions pgpenv in a docstring.
+        ("archivekit", "sigwire"),
     ),
     "pkgtrust": (
         "Tooling",
@@ -149,13 +282,14 @@ EXTRA: dict[
         "pkgtrust",
         "distribution supply-chain measurement: how distributions fetch, verify and patch upstream source",
         "PORTFOLIO.md s3 and s4 measurement tooling",
+        # archivekit and pgpenv are planned consumers (ROADMAP rows MV6 and MV8), not imports yet. kconfigpy was
+        # dropped in round 12: nothing in pkgtrust names it, and row R165 reads Kconfig itself.
         (
             "archivekit",
             "sigwire",
             "gitobj",
             "pkgformats",
             "pgpenv",
-            "kconfigpy",
             "attestkit",
             "advisoryformats",
         ),
@@ -169,8 +303,10 @@ EXTRA: dict[
         "attestkit",
         "SBOM and attestation documents: a neutral BOM model, CycloneDX 1.7 and SPDX 3.0.1 readers and writers, SPDX 2.3, in-toto Statements, SLSA provenance",
         "PORTFOLIO.md s9 item 15 (SBOMs and attestations); support library",
-        # pkgformats.vocab for purl; sigwire's DSSE parse layer, and sigwire[verify] for the verify extra
-        ("pkgformats", "sigwire"),
+        # pkgformats.vocab for purl; sigwire's DSSE parse layer, and sigwire[verify] for the verify extra; the
+        # `sigstore` extra adds asn1core, pkix, signeddata and ctspy. It does not declare tufverify yet: add that
+        # edge when its pyproject does.
+        ("pkgformats", "sigwire", "asn1core", "pkix", "signeddata", "ctspy"),
     ),
     "advisoryformats": (
         "Library",
@@ -179,8 +315,61 @@ EXTRA: dict[
         "advisoryformats",
         "vulnerability advisory formats (OSV, CVE record, Alpine secdb, Arch tracker, GLSA, CSAF, OpenVEX) with primary and secondary evidence labels",
         "PORTFOLIO.md s4 support libraries; s9 item 15",
-        # pkgformats.vocab for purl and versions; devicespy.xmlsafe for GLSA
-        ("pkgformats", "devicespy"),
+        # pkgformats.vocab for purl and versions; devicespy.xmlsafe for GLSA; attestkit declared in round 12
+        ("pkgformats", "devicespy", "attestkit"),
+    ),
+    # Support libraries scaffolded in round 8 (2026-11-13) and registered in round 9, laid out by hand like attestkit.
+    "idnawire": (
+        "Library",
+        0,
+        0,
+        "idnawire",
+        "IDNA 2008 (RFC 5890 to 5893, Punycode RFC 3492): U-label and A-label conversion, the RFC 5892 derived property from unicodedata, contextual and bidi rules, hostile-input limits",
+        "PORTFOLIO.md s4 support libraries (idnawire); s9 item 15",
+        # standard library only; pkix (names.idn_email) and registrata (hosts.registrable-idna2008) import it, and
+        # carry the edge
+        (),
+    ),
+    "tufverify": (
+        "Library",
+        0,
+        0,
+        "tufverify",
+        "a sans-IO TUF client (specification 1.0.37): root chain, timestamp, snapshot and targets verification with thresholds, rotation and delegations; no network, clock or file code",
+        "PORTFOLIO.md s4 support libraries (tufverify); s9 item 15",
+        # sigwire[verify] for ed25519, RSASSA-PSS and ECDSA P-256; attestkit will consume it for the Sigstore trusted root
+        ("sigwire",),
+    ),
+    "tlswire": (
+        "Library",
+        0,
+        0,
+        "tlswire",
+        "a sans-IO TLS 1.3 client handshake engine for QUIC (RFC 9846, which replaced RFC 8446): handshake messages in and out with no record layer, key schedule, exporter; AES-GCM and ChaCha20-Poly1305, x25519 and secp256r1 through `cryptography` primitives only; trust is decided by the caller's authenticator, never the engine",
+        "PORTFOLIO.md s4 support libraries (tlswire); s9 item 15",
+        # optional, through tlswire.authenticators (the `verify` extra): pkix, sigwire[verify], asn1core, idnawire
+        ("pkix", "sigwire", "asn1core", "idnawire"),
+    ),
+    "quicmux": (
+        "Library",
+        0,
+        0,
+        "quicmux",
+        "sans-IO QUIC building blocks, client first: variable-length integers, the RFC 9000 packet and frame codecs, RFC 9001 packet and header protection (versions 1 and 2), the Retry integrity tag and version negotiation",
+        "PORTFOLIO.md s9 item 15 (QUIC); tlswire's planned consumer; no s4 row yet",
+        # imports no sibling; tlswire is integration-tested only, skipped if absent
+        (),
+    ),
+    "proxylens": (
+        "Tooling",
+        0,
+        0,
+        "proxylens",
+        "a debugging proxy in the manner of Fiddler and Charles: TLS ClientHello server-name reading (RFC 6066), HTTP/1.1 and CONNECT, interception on the portfolio's own PKI, capture",
+        "PORTFOLIO.md s3 and s4 debugging proxy; registered 2026-11-15",
+        # asn1core, pkix and idnawire are planned imports (wave 2: leaf minting, upstream validation); certforge is
+        # planned only and has no directory, so it is not listed until it does. Wave 0 imports nothing.
+        ("asn1core", "pkix", "idnawire"),
     ),
     "distbuild": (
         "Tooling",
@@ -199,7 +388,25 @@ EXTRA: dict[
         0,
         "berkit",
         "ASN.1 BER and DER in Rust (no_std, no allocation) built from ITU-T X.690 and X.680, with a language-neutral conformance corpus",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/berkit; not on crates.io)",
+        (),
+    ),
+    "asn1wire": (
+        "Library",
+        0,
+        0,
+        "asn1wire",
+        "DER and one X.509 certificate in TypeScript, no runtime dependency, no signature check and no trust decision",
+        "PORTFOLIO.md s3 and s4 TypeScript library (registered 2026-11-17; not published to npm)",
+        (),
+    ),
+    "vcxtoolkit": (
+        "Library",
+        0,
+        0,
+        "vcxtoolkit",
+        "VCX serial frames for a VXDIAG dongle: one frame, its checksum and its DD escape",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-20; https://github.com/b1tninja-labs/vcxtoolkit; not on crates.io)",
         (),
     ),
     "cardkit": (
@@ -208,7 +415,7 @@ EXTRA: dict[
         0,
         "cardkit",
         "six no_std crates under a USB smart-card reader: USB descriptors, CCID, APDU framing and exchange, the PIV model (USB CCID 1.1, NIST SP 800-73-5, ISO/IEC 7816)",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/cardkit; not on crates.io)",
         (),
     ),
     "piv-card": (
@@ -217,7 +424,7 @@ EXTRA: dict[
         0,
         "piv-card",
         "PC/SC and PIV card access with a read-only piv-inventory CLI",
-        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13)",
+        "PORTFOLIO.md s3 and s4 Rust crates (registered 2026-11-13; public on GitHub since 2026-11-14, https://github.com/b1tninja-labs/piv-card; not on crates.io)",
         # path dependencies: cardkit's apdu-core, apdu-exchange and piv-model, and berkit
         ("cardkit", "berkit"),
     ),
@@ -246,6 +453,154 @@ EXTRA: dict[
         "kconfigpy",
         "explainable Kconfig analysis: a minimal kernel config from hardware, with a reason for every option",
         "decided 2026-11-12: tier 3, unsequenced, not active",
+    ),
+    # Vehicle tools, registered 2026-11-21. Untiered. spskit will import techlinekit once its
+    # dirty checkout is clean. The Bluetooth MX path is not that import: obdhub path-depends on
+    # gattmirror and fakeobd, and voltkit's lab and bench commands start fakeobd and obd-bridge.
+    # obd-bridge keeps its own WinRT client and does not depend on gattmirror. PORTFOLIO.md
+    # section 6 still draws none of these edges.
+    "voltkit": (
+        "Tooling",
+        0,
+        0,
+        "voltkit",
+        "ELM327 read client for the Voltage Wi-Fi session and a Windows COM port",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/voltkit; publish = false); voltkit/ROADMAP.md lab and bench commands",
+        ("fakeobd", "obd-bridge"),
+    ),
+    "techlinekit": (
+        "Library",
+        0,
+        0,
+        "techlinekit",
+        "ACDelco TDS and Techline Connect client: sign-in, licensed downloads, SPS Info, and the launcher handoff; it does not program a vehicle",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/techlinekit; tdskit refused)",
+        (),
+    ),
+    "spskit": (
+        "Library",
+        0,
+        0,
+        "spskit",
+        "SPS2 module downloader and programming-data request for a licensed TDS subscription; it does not program a vehicle",
+        "PORTFOLIO.md s3 (registered 2026-11-19; https://github.com/b1tninja-labs/spskit)",
+        (),
+    ),
+    # Vehicle format and diagnostics readers, registered 2026-11-21 (PORTFOLIO.md s3). All are offline,
+    # open no bus and program no vehicle; none imports another, so each depends on nothing. spswire is a
+    # standard-library-only Python reader (HAND_OWNED, Python-gated). The four diagnostics crates -
+    # udskit (renamed from udsdiag), isotpkit, mode06kit and gmdtcdb - were ported Python -> Rust on
+    # 2026-11-21 (isotpkit's PR merged last) and are in RUST_OWNED (synced, not Python-gated).
+    "spswire": (
+        "Library",
+        0,
+        0,
+        "spswire",
+        "read-only readers for GMG3 SPS update-container formats: the 0x4d uImage LZ77 codec, the U-Boot legacy header, the i.MX6 IVT, the GM .smd PEM bundle and the .mnf release XML; it does not flash, sign or open a device",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/spswire)",
+        (),
+    ),
+    "isotpkit": (
+        "Library",
+        0,
+        0,
+        "isotpkit",
+        "an offline ISO 15765-2:2016 (ISO-TP, DoCAN) transport/network-layer codec: it segments a UDS/GMLAN PDU into the four N_PDU types on classic-CAN frames and reassembles them; the transport layer under udskit, importing nothing from it, and it runs no bus",
+        "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/isotpkit)",
+        (),
+    ),
+    "udskit": (
+        "Library",
+        0,
+        0,
+        "udskit",
+        "an offline model of UDS (ISO 14229-1:2013) and GM GMLAN diagnostic services: the SID and NRC catalogs, a request/response PDU codec, and reference catalogs for DIDs, DTCs, RoutineControl, IOControl and SecurityAccess; it opens no bus and writes nothing to a vehicle",
+        "PORTFOLIO.md s3 (registered 2026-11-21 as udsdiag; renamed udskit and ported to Rust 2026-11-21; https://github.com/b1tninja-labs/udskit)",
+        (),
+    ),
+    "mode06kit": (
+        "Library",
+        0,
+        0,
+        "mode06kit",
+        "a parser for GM's published Mode $06 / SAE J1979 (ISO 15031-5) OBD documents into a typed OBD Monitor ID / Test ID / unit-and-scaling model, read through the primarysource gm_* tools; it vendors no PDF",
+        "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/mode06kit)",
+        (),
+    ),
+    "gmdtcdb": (
+        "Library",
+        0,
+        0,
+        "gmdtcdb",
+        "the full 841-code GM Diagnostic Trouble Code database for the Volt, joined to GM's 17OBDG01 Hybrid Diagnostics fault-code set, with a query CLI; the complete-dataset counterpart to the subset in udskit",
+        "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/gmdtcdb)",
+        (),
+    ),
+    # The live driver on top of the four diagnostics crates: the first of this family that reads and
+    # writes a vehicle (the others are offline). Rust binary crate; path-depends on udskit, isotpkit,
+    # gmdtcdb and mode06kit.
+    "gmdiag": (
+        "Tooling",
+        0,
+        0,
+        "gmdiag",
+        "a live read/write GM Techline/GDS2 diagnostic driver: a Transport trait with ELM327-over-TCP, a UDS/GMLAN session core over udskit/isotpkit/gmdtcdb/mode06kit, and a read-first CLI with gated writes (fakeobd-first)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdiag)",
+        ("udskit", "isotpkit", "gmdtcdb", "mode06kit"),
+    ),
+    "gattmirror": (
+        "Library",
+        0,
+        0,
+        "gattmirror",
+        "mirrors a Bluetooth LE peripheral into the Android emulator over the netsimd HCI socket",
+        "PORTFOLIO.md s3 (registered 2026-11-14; https://github.com/b1tninja-labs/gattmirror; publish = false)",
+        (),
+    ),
+    "fakeobd": (
+        "Tooling",
+        0,
+        0,
+        "fakeobd",
+        "ELM327 and ISO-TP simulator that serves a lab profile",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/fakeobd; publish = false)",
+        (),
+    ),
+    "obd-bridge": (
+        "Tooling",
+        0,
+        0,
+        "obd-bridge",
+        "republishes a BLE ELM327 adapter as ELM327 over TCP",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/obd-bridge); obligation matrix is obd-bridge/ROADMAP.md, read because the name is in RUST_OWNED",
+        (),
+    ),
+    "obdhub": (
+        "Tooling",
+        0,
+        0,
+        "obdhub",
+        "composes the emulator BLE frontend onto fakeobd through gattmirror",
+        "not a PORTFOLIO.md section 3 row; obdhub/crates/obdhub/Cargo.toml path-depends on gattmirror and fakeobd (Bluetooth MX map, 2026-11-21)",
+        ("gattmirror", "fakeobd"),
+    ),
+    "fakegatt": (
+        "Library",
+        0,
+        0,
+        "fakegatt",
+        "GATT scenarios over gattmirror and fakeobd; optional behind obdhub's fakegatt feature",
+        "not a PORTFOLIO.md section 3 row; fakegatt/docs/gattmirror-coupling.md (Bluetooth MX map, 2026-11-21). Kept out of RUST_OWNED while its roadmap still says the Core Specification is absent",
+        ("gattmirror", "fakeobd"),
+    ),
+    "obdlink-re": (
+        "Reference",
+        0,
+        0,
+        "obdlink-re",
+        "recovered OBDLink commands and the BLE serial service identifiers; no obligation matrix",
+        "not a PORTFOLIO.md section 3 row; obd-bridge and fakeobd cite it (Bluetooth MX map, 2026-11-21)",
+        (),
     ),
 }
 

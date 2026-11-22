@@ -50,6 +50,7 @@ import json
 import pathlib
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 import uuid
@@ -693,6 +694,72 @@ class Store:
                 "state": "queued",
             }
 
+    def audit(
+        self, project: str, row_id: str, sha: str, root: pathlib.Path | None = None
+    ) -> dict[str, object]:
+        """Queue an evidence check for a row that already reads done at `sha`, with no lease.
+
+        A row flipped to [ok] before its commit was submitted could never be checked: its lease had lapsed, and
+        acquire refuses a done row because there is no work left to claim (pkix's eight rows of 2026-11-14).
+        Checking is not claiming, so this takes no lease and writes no Status; the worker judges it like any
+        other submission and the verdict, not this call, says whether the row stands.
+        """
+        commit = sha.strip().lower()
+        if not SHA.fullmatch(commit):
+            raise LeaseError(
+                "BAD_SHA", "audit a full 40-hex commit id, not a branch, tag or prefix"
+            )
+        from projecthub.db import parser as roadmap
+        from projecthub.evidence import worker as evidence
+
+        base = root or evidence.default_root()
+        repo = evidence.project_checkout(base, project)
+        matrix = roadmap.matrix_path(base, project)
+        if matrix is None:
+            raise LeaseError("NO_ROW", f"{project} has no roadmap matrix under {base}")
+        name = matrix.relative_to(repo).as_posix()
+        shown = subprocess.run(  # noqa: S603
+            ["git", "-C", str(repo), "show", f"{commit}:{name}"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if shown.returncode != 0:
+            raise LeaseError(
+                "NO_COMMIT",
+                f"{commit} or its roadmap is not in {repo}: {shown.stderr.strip()[:160]}",
+            )
+        rows = {r["name"]: r for r in roadmap.rows_of(shown.stdout)}
+        if row_id not in rows and row_id.endswith("()"):
+            # ROADMAP ids are spelled `validity.check_signature()` but parsed without the parentheses.
+            row_id = row_id[:-2]
+        if row_id not in rows:
+            raise LeaseError(
+                "NO_ROW", f"{project} has no row {row_id} at {commit[:12]}"
+            )
+        if rows[row_id]["state"] != "done":
+            raise LeaseError(
+                "NOT_DONE",
+                f"{project}:{row_id} reads {rows[row_id]['status']} at {commit[:12]}; an open row is leased "
+                "and submitted, not audited",
+            )
+        key = row_key(project, row_id)
+        with self._write() as db:
+            cursor = db.execute(
+                "INSERT INTO submissions(row_key, sha, lease_id, at, state) VALUES (?, ?, NULL, ?, 'queued')",
+                (key, commit, self.now()),
+            )
+            self._event(db, None, key, "audit", commit, queue=False)
+            return {
+                "submission_id": int(cursor.lastrowid or 0),
+                "row_key": key,
+                "sha": commit,
+                "state": "queued",
+                "leased": False,
+            }
+
     # -- the outbox, for the process that drains it ------------------------------------------------
 
     def pending(self, limit: int = 50) -> list[dict[str, object]]:
@@ -963,6 +1030,36 @@ def board_client() -> tuple[object | None, str]:
     return Projects(), ""
 
 
+AUTODRAIN_LIMIT = 25
+
+
+def drain_now(store: Store, limit: int = AUTODRAIN_LIMIT) -> str:
+    """Send what the outbox holds right after a lease write, so the board follows the work without a person
+    remembering `projecthub drain`. Best effort and never fatal: the write has already landed locally, and an
+    entry that cannot be sent stays queued for the next write or a manual drain. Skipped when offline or when
+    PROJECTHUB_NO_AUTODRAIN is set. Returns a one-line summary, empty when nothing was attempted.
+
+    Why it exists: on 2026-11-14 nothing ran the drain, 24 writes sat in the outbox, and every released lease
+    still read as claimed on the board, so the next agent's acquire was refused until the claim expired."""
+    if paths.env("NO_AUTODRAIN"):
+        return ""
+    client, _why = board_client()
+    if client is None:
+        return ""
+    if not store.pending(1):
+        return ""
+    from projecthub.github import outbox
+
+    try:
+        report = outbox.drain(store, client, limit=limit)  # type: ignore[arg-type]
+    except Exception as error:  # noqa: BLE001 - the local write stands; the entry stays queued
+        return f"outbox: not drained ({error}); run `projecthub drain`"
+    if report.stopped:
+        return f"outbox: drain stopped ({report.stopped}); run `projecthub drain`"
+    left = len(store.pending(limit + 1))
+    return f"outbox: drained ({left} still queued)" if left else "outbox: drained"
+
+
 def claims_for(store: Store) -> ProjectClaims:
     """The Project-backed claimant for `store`, through the default client."""
     from projecthub.github.claims import ProjectClaims
@@ -984,7 +1081,15 @@ def build(  # type: ignore[no-untyped-def]
 
     leases = store or Store()
     board = claims or claims_for(leases)
-    check = ready or _ready_from_planner
+
+    def check(project: str, row_id: str) -> str:
+        # An injected `ready` decides alone; the default planner check activates the row's project on claim.
+        if ready is not None:
+            return ready(project, row_id)
+        return _ready_from_planner(
+            project, row_id, activate=lambda p: board.activate(p, row_id)
+        )
+
     app = MCPServer(name="projecthub-work", instructions=INSTRUCTIONS)
     write = ToolAnnotations(
         read_only_hint=False,
@@ -1001,17 +1106,20 @@ def build(  # type: ignore[no-untyped-def]
 
     def guarded(call):  # type: ignore[no-untyped-def]
         try:
-            return call()
+            result = call()
         except LeaseError as error:
             raise ToolError(str(error)) from error
+        drain_now(leases)
+        return result
 
     @app.tool(
         name="claim",
         description=(
             f"Claim a ready row on GitHub Project 1. TTL defaults to {DEFAULT_TTL}s and is capped at {MAX_TTL}s; "
             "heartbeat before it runs out. Writes Agent, Claimed, Status In progress and Claim expires, re-reads "
-            "the item, and returns a lease id only when the claim stood. Refuses NOT_READY (inactive project, plan "
-            "directory, unbuilt dependency, declared non-goal), LEASE_HELD (claimed by someone else, or lost the "
+            "the item, and returns a lease id only when the claim stood. A row whose only obstacle is an inactive "
+            "project marks that project Active first. Refuses NOT_READY (plan directory, unbuilt dependency, "
+            "declared non-goal), NO_PROJECT_ITEM / ACTIVATE_FAILED (the project could not be marked Active), LEASE_HELD (claimed by someone else, or lost the "
             "race), HOLDER_BUSY, OFFLINE (the Project cannot be reached; nothing is claimed) and RATE_BUDGET_LOW. "
             "scope_files is advisory: the files you expect to touch."
         ),
@@ -1185,19 +1293,42 @@ def build(  # type: ignore[no-untyped-def]
     return app
 
 
-def _ready_from_planner(project: str, row_id: str) -> str:
-    """Empty if the read server's next would list the row, else the reason it is held back."""
+def _ready_from_planner(
+    project: str, row_id: str, activate: Callable[[str], object] | None = None
+) -> str:
+    """Empty if the read server's next would list the row, else the reason it is held back.
+
+    With `activate`, a row held back only because its project is not Active is made ready by calling
+    `activate(project)`: taking a lease on a row is the owner's decision that its project carries effort now,
+    so the claim moves the project to Active instead of refusing. Every other reason (plan directory, unbuilt
+    dependency, not an open row) still refuses, and the project is then not activated."""
     from projecthub.mcp import read as planner
 
     try:
         active = planner.active_projects()
     except Exception as error:  # the board could not be read: refuse rather than guess
         return f"could not read Active from the board: {error}"
+
+    def listed(result: dict[str, object]) -> bool:
+        ready = result["ready"] if isinstance(result["ready"], list) else []
+        return any(r["row_id"] == row_id for r in ready)
+
     result = planner.ready_rows(active, project, limit=10_000)
-    ready = result["ready"] if isinstance(result["ready"], list) else []
-    skipped = result["skipped"] if isinstance(result["skipped"], dict) else {}
-    if any(r["row_id"] == row_id for r in ready):
+    if listed(result):
         return ""
+    if activate is not None and project not in active:
+        assumed = planner.ready_rows(active | {project}, project, limit=10_000)
+        if listed(assumed):
+            activate(project)
+            if len(active) >= 2:
+                print(
+                    f"note: {project} is now Active beside {', '.join(sorted(active))}; "
+                    "the portfolio rule is at most two",
+                    file=sys.stderr,
+                )
+            return ""
+        result = assumed
+    skipped = result["skipped"] if isinstance(result["skipped"], dict) else {}
     reasons = ", ".join(f"{k} ({v})" for k, v in skipped.items())
     return f"{project}:{row_id} is not ready" + (
         f": {reasons}" if reasons else ": not an open row of that project"
@@ -1233,13 +1364,23 @@ def main(argv: list[str]) -> int:
         "         | block <lease_id> <kind> <detail>\n"
         "         | note <lease_id> <kind> <text> [--ref REF]... | park <lease_id> <note>\n"
         "         | propose <project> <kind> <title> --why TEXT [--spec S] [--found-in F]\n"
-        "         | submit <lease_id> <sha> | log <row_key> [--limit N] | outbox [--limit N]]",
+        "         | submit <lease_id> <sha> | audit <project> <row_id> <sha>\n"
+        "         | log <row_key> [--limit N] | outbox [--limit N]]",
         file=sys.stderr,
     )
     return 2
 
 
-WORK_COMMANDS = ("acquire", "note", "park", "propose", "submit", "log", "outbox")
+WORK_COMMANDS = (
+    "acquire",
+    "note",
+    "park",
+    "propose",
+    "submit",
+    "audit",
+    "log",
+    "outbox",
+)
 
 
 def _work(store: Store, argv: list[str]) -> int:
@@ -1276,6 +1417,13 @@ def _work(store: Store, argv: list[str]) -> int:
     submit = sub.add_parser("submit", help="queue a commit for an evidence check")
     submit.add_argument("lease_id")
     submit.add_argument("sha")
+    audit = sub.add_parser(
+        "audit",
+        help="queue an evidence check for a row already [ok] at a commit; no lease",
+    )
+    audit.add_argument("project")
+    audit.add_argument("row_id")
+    audit.add_argument("sha")
     log = sub.add_parser("log", help="recent events on a row, with note text")
     log.add_argument("row_key")
     log.add_argument("--limit", type=int, default=20)
@@ -1285,10 +1433,15 @@ def _work(store: Store, argv: list[str]) -> int:
     try:
         got: object
         if args.command == "acquire":
-            why = _ready_from_planner(args.project, args.row_id)
+            claimant = claims_for(store)
+            why = _ready_from_planner(
+                args.project,
+                args.row_id,
+                activate=lambda p: claimant.activate(p, args.row_id),
+            )
             if why:
                 raise LeaseError("NOT_READY", why)
-            lease = claims_for(store).acquire(
+            lease = claimant.acquire(
                 args.project,
                 args.row_id,
                 args.holder,
@@ -1319,6 +1472,8 @@ def _work(store: Store, argv: list[str]) -> int:
             )
         elif args.command == "submit":
             got = store.submit(args.lease_id, args.sha)
+        elif args.command == "audit":
+            got = store.audit(args.project, args.row_id, args.sha)
         elif args.command == "log":
             got = {
                 "row_key": args.row_key,
@@ -1331,7 +1486,15 @@ def _work(store: Store, argv: list[str]) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(got if isinstance(got, str) else json.dumps(got, indent=2))
+    if args.command not in ("log", "outbox"):
+        _say_drained(store)
     return 0
+
+
+def _say_drained(store: Store) -> None:
+    summary = drain_now(store)
+    if summary:
+        print(summary, file=sys.stderr)
 
 
 def _finish(store: Store, argv: list[str]) -> int:
@@ -1362,6 +1525,7 @@ def _finish(store: Store, argv: list[str]) -> int:
     except LeaseError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    _say_drained(store)
     return 0
 
 
