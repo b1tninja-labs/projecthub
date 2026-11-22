@@ -547,7 +547,13 @@ EXTRA: dict[
         "gmdiag",
         "a live read/write GM Techline/GDS2 diagnostic driver: a Transport trait with ELM327-over-TCP, a UDS/GMLAN session core over udskit/isotpkit/gmdtcdb/mode06kit, and a read-first CLI with gated writes (fakeobd-first)",
         "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdiag)",
-        ("udskit", "isotpkit", "gmdtcdb", "mode06kit"),
+        # vcikit added 2026-11-22: gmdiag's VciTransport path-depends on vcikit's RawBackend (gmdiag
+        # PR #7), native-VCX first with a J2534 fallback. The arrow is to the vcikit PROJECT only;
+        # gmdiag's Cargo.toml also path-deps the vcikit-j2534 member crate, but member crates of the
+        # vcikit workspace are not separate registered projects, so they are not arrows (an arrow to an
+        # unregistered name dangles). This mirrors piv-card -> cardkit, where piv-card path-deps
+        # cardkit's member crates but the arrow is piv-card -> cardkit.
+        ("udskit", "isotpkit", "gmdtcdb", "mode06kit", "vcikit"),
     ),
     # vcikit is the one vehicle crate the owner sequenced into the tiered flow (2026-11-22): tier 4
     # (hold - narrow audience, a vehicle-diagnostics seam), wave 5 (the rest, one at a time), mirroring

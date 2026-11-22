@@ -299,10 +299,14 @@ def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
     )
 
 
-def test_gmdiag_is_the_live_driver_over_the_four_crates():
-    """PORTFOLIO.md section 3 (2026-11-21): gmdiag is the live read/write GM diagnostic driver, a
-    Rust binary that path-depends on all four diagnostics crates. It is RUST_OWNED (synced, not
-    Python-gated) and the only one of this family that touches a vehicle."""
+def test_gmdiag_is_the_live_driver_over_the_diagnostics_crates_and_the_vci():
+    """PORTFOLIO.md section 3: gmdiag is the live read/write GM diagnostic driver, a Rust binary that
+    path-depends on the four diagnostics crates, and from 2026-11-22 on `vcikit` too — its
+    VciTransport consumes vcikit's RawBackend (gmdiag PR #7). It is RUST_OWNED (synced, not
+    Python-gated) and the only one of this family that touches a vehicle. The arrow is to the vcikit
+    project; gmdiag also path-deps the vcikit-j2534 member crate, which is not a separate registered
+    project (so not an arrow), exactly as piv-card path-deps cardkit's member crates but arrows only
+    to cardkit."""
     entry = next(e for e in p.entries() if e.name == "gmdiag")
     assert (entry.kind, entry.tier, entry.wave, entry.directory) == (
         "Tooling",
@@ -310,7 +314,13 @@ def test_gmdiag_is_the_live_driver_over_the_four_crates():
         0,
         "gmdiag",
     )
-    assert set(entry.depends) == {"udskit", "isotpkit", "gmdtcdb", "mode06kit"}
+    assert set(entry.depends) == {
+        "udskit",
+        "isotpkit",
+        "gmdtcdb",
+        "mode06kit",
+        "vcikit",
+    }
     from projecthub.db import parser
 
     assert "gmdiag" in parser.RUST_OWNED and "gmdiag" not in parser.HAND_OWNED
