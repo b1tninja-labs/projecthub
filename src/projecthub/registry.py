@@ -549,6 +549,22 @@ EXTRA: dict[
         "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdiag)",
         ("udskit", "isotpkit", "gmdtcdb", "mode06kit"),
     ),
+    # vcikit is the one vehicle crate the owner sequenced into the tiered flow (2026-11-22): tier 4
+    # (hold - narrow audience, a vehicle-diagnostics seam), wave 5 (the rest, one at a time), mirroring
+    # miblang (4, 5). Its siblings above stay untiered (0, 0) by the owner's decision; this is the
+    # deliberate exception, not a new default. No hard dependency arrow: the built SAE J2534 backend
+    # delivers behaviour standalone (registry discovery + the J2534-1 ISO 15765 API). The native-VCX
+    # backend is exposed but unimplemented, blocked on vcxtoolkit's raw-mode channel bring-up - an
+    # internal future backend, not a delivery blocker, so it is not an arrow.
+    "vcikit": (
+        "Library",
+        4,
+        5,
+        "vcikit",
+        "a transport-agnostic VCI raw-mode layer: the 4-byte CAN-id-prefixed PDU convention (ISO 22900-2 s9.2.6.3.6), the link config, and a RawBackend seam with a built SAE J2534 pass-through backend (registry discovery under PassThruSupport.04.04 + the J2534-1 ISO 15765 API) and a planned native-VCX backend; the seam gmdiag drives, owning no UDS or dongle-frame logic",
+        "PORTFOLIO.md s3 and s4 (registered and shelled 2026-11-22; J2534 backend built; sequenced tier 4 / wave 5 at the owner's instruction 2026-11-22; https://github.com/b1tninja-labs/vcikit)",
+        (),
+    ),
     "gattmirror": (
         "Library",
         0,
