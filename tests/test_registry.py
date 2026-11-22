@@ -283,7 +283,8 @@ def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
     assert "spswire" in parser.HAND_OWNED
     assert {"udskit", "isotpkit", "mode06kit", "gmdtcdb"} <= set(parser.RUST_OWNED)
     assert not (
-        {"udskit", "udsdiag", "isotpkit", "mode06kit", "gmdtcdb"} & set(parser.HAND_OWNED)
+        {"udskit", "udsdiag", "isotpkit", "mode06kit", "gmdtcdb"}
+        & set(parser.HAND_OWNED)
     )
 
 
