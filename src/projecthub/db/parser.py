@@ -534,7 +534,6 @@ HAND_OWNED = (
     "regfwire",
     "udfvol",
     "asn1wire",
-    "spskit",
     "techlinekit",
     "spswire",
     "projecthub",
@@ -575,6 +574,7 @@ RUST_OWNED = (
     "mode06kit",
     "gmdtcdb",
     "gmdiag",
+    "spskit",
 )
 # Where a project keeps rows besides its matrix file: glob patterns relative to the project directory. The
 # matrix file then holds only what spans the fragments. A project absent here has one matrix file.

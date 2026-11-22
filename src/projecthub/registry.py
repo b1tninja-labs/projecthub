@@ -454,8 +454,9 @@ EXTRA: dict[
         "explainable Kconfig analysis: a minimal kernel config from hardware, with a reason for every option",
         "decided 2026-11-12: tier 3, unsequenced, not active",
     ),
-    # Vehicle tools, registered 2026-11-21. Untiered. spskit will import techlinekit once its
-    # dirty checkout is clean. The Bluetooth MX path is not that import: obdhub path-depends on
+    # Vehicle tools, registered 2026-11-21. Untiered. spskit was ported Python -> Rust on 2026-11-21
+    # and moved to RUST_OWNED (synced, not Python-gated); it reproduces techlinekit's one VIN rule
+    # rather than importing it. The Bluetooth MX path is not that import: obdhub path-depends on
     # gattmirror and fakeobd, and voltkit's lab and bench commands start fakeobd and obd-bridge.
     # obd-bridge keeps its own WinRT client and does not depend on gattmirror. PORTFOLIO.md
     # section 6 still draws none of these edges.
@@ -482,8 +483,8 @@ EXTRA: dict[
         0,
         0,
         "spskit",
-        "SPS2 module downloader and programming-data request for a licensed TDS subscription; it does not program a vehicle",
-        "PORTFOLIO.md s3 (registered 2026-11-19; https://github.com/b1tninja-labs/spskit)",
+        "the GM SPS2 programming request as a Rust crate: the VIT1 getProgrammingData body and the GM J2534 wrapper connect string, built from a saved module read, plus the offline spskit-vit1 CLI; it does not program a vehicle, post to TDS, or open a port",
+        "PORTFOLIO.md s3 (registered 2026-11-19; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/spskit)",
         (),
     ),
     # Vehicle format and diagnostics readers, registered 2026-11-21 (PORTFOLIO.md s3). All are offline,
