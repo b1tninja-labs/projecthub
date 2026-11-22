@@ -240,10 +240,16 @@ def test_the_bluetooth_mx_path_is_registered():
     assert entries["spskit"].depends == ()
     from projecthub.db import parser
 
-    assert {"spskit", "techlinekit", "projecthub"} <= set(parser.HAND_OWNED)
-    assert {"gattmirror", "fakeobd", "voltkit", "obdhub", "obd-bridge"} <= set(
-        parser.RUST_OWNED
-    )
+    assert {"techlinekit", "projecthub"} <= set(parser.HAND_OWNED)
+    assert "spskit" not in parser.HAND_OWNED
+    assert {
+        "spskit",
+        "gattmirror",
+        "fakeobd",
+        "voltkit",
+        "obdhub",
+        "obd-bridge",
+    } <= set(parser.RUST_OWNED)
     assert "fakegatt" not in parser.RUST_OWNED
     assert "obdlink-re" not in parser.RUST_OWNED
     text = (pathlib.Path(__file__).parents[1] / "ROADMAP.md").read_text(
@@ -283,7 +289,8 @@ def test_the_vehicle_readers_are_registered_and_depend_on_nothing():
     assert "spswire" in parser.HAND_OWNED
     assert {"udskit", "isotpkit", "mode06kit", "gmdtcdb"} <= set(parser.RUST_OWNED)
     assert not (
-        {"udskit", "udsdiag", "isotpkit", "mode06kit", "gmdtcdb"} & set(parser.HAND_OWNED)
+        {"udskit", "udsdiag", "isotpkit", "mode06kit", "gmdtcdb"}
+        & set(parser.HAND_OWNED)
     )
 
 
