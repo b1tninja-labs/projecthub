@@ -564,7 +564,7 @@ EXTRA: dict[
         0,
         "fakeobd",
         "ELM327 and ISO-TP simulator that serves a lab profile",
-        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja/fakeobd; publish = false)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/fakeobd; publish = false)",
         (),
     ),
     "obd-bridge": (
