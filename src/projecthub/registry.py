@@ -536,6 +536,18 @@ EXTRA: dict[
         "PORTFOLIO.md s3 (registered 2026-11-21; ported to Rust 2026-11-21; https://github.com/b1tninja-labs/gmdtcdb)",
         (),
     ),
+    # The live driver on top of the four diagnostics crates: the first of this family that reads and
+    # writes a vehicle (the others are offline). Rust binary crate; path-depends on udskit, isotpkit,
+    # gmdtcdb and mode06kit.
+    "gmdiag": (
+        "Tooling",
+        0,
+        0,
+        "gmdiag",
+        "a live read/write GM Techline/GDS2 diagnostic driver: a Transport trait with ELM327-over-TCP, a UDS/GMLAN session core over udskit/isotpkit/gmdtcdb/mode06kit, and a read-first CLI with gated writes (fakeobd-first)",
+        "PORTFOLIO.md s3 (registered 2026-11-21; https://github.com/b1tninja-labs/gmdiag)",
+        ("udskit", "isotpkit", "gmdtcdb", "mode06kit"),
+    ),
     "gattmirror": (
         "Library",
         0,
